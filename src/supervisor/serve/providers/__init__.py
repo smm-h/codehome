@@ -1,0 +1,25 @@
+"""Provider modules -- auto-registers all providers on import."""
+
+# Import provider modules to trigger self-registration.
+from supervisor.serve.providers import (
+    figma,  # noqa: F401
+    github,  # noqa: F401
+    linear,  # noqa: F401
+    notion,  # noqa: F401
+    slack,  # noqa: F401
+)
+from supervisor.serve.providers.base import Provider
+from supervisor.serve.providers.registry import (
+    all_providers,
+    available_providers,
+    get_provider,
+    register,
+)
+
+__all__ = [
+    "Provider",
+    "all_providers",
+    "available_providers",
+    "get_provider",
+    "register",
+]
