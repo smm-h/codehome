@@ -10,7 +10,7 @@ try {
   process.exit(1);
 }
 
-const result = spawnSync("python3", ["-m", "supervisor", ...process.argv.slice(2)], {
+const result = spawnSync("python3", ["-m", "codehome", ...process.argv.slice(2)], {
   stdio: "inherit",
 });
 process.exit(result.status ?? 1);

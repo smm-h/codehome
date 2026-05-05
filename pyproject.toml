@@ -25,16 +25,16 @@ dependencies = [
 ]
 
 [project.scripts]
-codehome = "supervisor.cli:main"
+codehome = "codehome.cli:main"
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/supervisor"]
+packages = ["src/codehome"]
 exclude = [
     "**/tests/",
     "test_*.py",
-    "src/supervisor/serve/static/",
+    "src/codehome/serve/static/",
 ]
