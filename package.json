@@ -1,6 +1,6 @@
 {
   "name": "codehome",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Plugin-based worktree manager and dev tool orchestrator",
   "license": "MIT",
   "bin": {
