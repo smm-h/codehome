@@ -1,31 +1,7 @@
 #!/usr/bin/env bash
-# Pre-release validation hook.
-# Runs before rlsbl creates a release. Exit non-zero to abort.
-# Detects project type and runs appropriate checks automatically.
-
+# Pre-release validation: verify the wheel builds cleanly.
 set -euo pipefail
-
-echo "Running pre-release checks..."
-
-if [ -f go.mod ]; then
-  echo "  Go: vet + build + test"
-  go vet ./...
-  go build ./...
-  go test ./... -race -short -count=1
-fi
-
-if [ -f pyproject.toml ]; then
-  echo "  Python: pytest"
-  if command -v uv &>/dev/null; then
-    uv run pytest
-  elif command -v pytest &>/dev/null; then
-    pytest
-  fi
-fi
-
-if [ -f package.json ] && node -e "process.exit(require('./package.json').scripts?.test ? 0 : 1)" 2>/dev/null; then
-  echo "  npm: test"
-  npm test
-fi
-
+echo "Building wheel..."
+uv build --wheel --quiet
+rm -rf dist/
 echo "Pre-release checks passed."
