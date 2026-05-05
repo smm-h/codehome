@@ -8,7 +8,7 @@ This project uses [rlsbl](https://github.com/smm-h/rlsbl) for release orchestrat
 - Run `rlsbl release [patch|minor|major]` to bump version and create a GitHub Release
 - CI handles publishing automatically via the publish workflow
 - Never publish manually — always use `rlsbl release`
-- Configure Trusted Publishing on pypi.org for automated PyPI releases
+- Requires NPM_TOKEN secret on GitHub (Settings > Secrets > Actions)
 - Use `rlsbl release --dry-run` to preview a release without making changes
 
 ## Conventions
