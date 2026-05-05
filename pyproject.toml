@@ -38,3 +38,7 @@ exclude = [
     "test_*.py",
     "src/codehome/serve/static/",
 ]
+
+[project.urls]
+Homepage = "https://codehome.org"
+Repository = "https://github.com/smm-h/codehome"
