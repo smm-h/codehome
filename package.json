@@ -1,0 +1,28 @@
+{
+  "name": "codehome",
+  "version": "0.1.0",
+  "description": "Plugin-based worktree manager and dev tool orchestrator",
+  "license": "MIT",
+  "bin": {
+    "codehome": "bin/cli.js"
+  },
+  "files": [
+    "bin/"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/smm-h/codehome.git"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "worktree",
+    "plugins",
+    "dev-tools",
+    "cli",
+    "codehome",
+    "rlsbl"
+  ],
+  "author": "smm-h"
+}
