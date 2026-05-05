@@ -1,0 +1,10 @@
+{
+  ".github/workflows/ci.yml": "2f84fcf325be0b5caa94655a041b8e245a09d63630f0ba923a0da82a41147d83",
+  ".github/workflows/publish.yml": "55e2dba57d17218c2887ba90051d31aee15067cc0b69c8adebc2deab07aef76b",
+  "CHANGELOG.md": "7a6ec46141007c18090a0ff325e2dd68cd51588c4e0b5af7b580365e5eaaca85",
+  ".gitignore": "5997d10bd2597a912beff932e3135e88f40c7dd0390c368ad3bfd0953a4d8a04",
+  "CLAUDE.md": "fc4e427d3ddc624fdd5764e16aada523c7d24160c0f41a264fe4553c74b2129f",
+  ".rlsbl/hooks/pre-release.sh": "9bae4134d0a4c302287766f9a4a2923b6c5706d2cc7078f553fec843b8cd5a06",
+  ".rlsbl/hooks/post-release.sh": "b455f8511e0b2655509ecf5dcb0ab7da5bb7c961f47910ff8e00cab5bd51f833",
+  ".claude/settings.json": "78922a784ee78e9e50587e93628cd3b9d4dfbe49087adc4514e6781cea38cbb9"
+}
