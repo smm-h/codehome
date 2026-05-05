@@ -1,0 +1,31 @@
+{
+  "plugins": [
+    {
+      "name": "veliu-plugins",
+      "repo": "https://github.com/GreenCapitals/supervisor",
+      "description": "Veliu development plugins for codehome",
+      "plugins_provided": [
+        "supervisor",
+        "dashboard",
+        "deploy",
+        "design",
+        "extensions",
+        "figma",
+        "figma2sdui",
+        "hubspot",
+        "incantino",
+        "inspect",
+        "linear",
+        "lisa",
+        "publisher",
+        "reveng",
+        "review",
+        "supabase",
+        "tdd",
+        "team",
+        "telemac",
+        "tests"
+      ]
+    }
+  ]
+}
