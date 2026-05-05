@@ -1,9 +1,9 @@
 {
   "plugins": [
     {
-      "name": "veliu-plugins",
+      "name": "supervisor",
       "repo": "https://github.com/GreenCapitals/supervisor",
-      "description": "Veliu development plugins for codehome",
+      "description": "Worktree, branch, git, and dev infrastructure plugins for codehome",
       "plugins_provided": [
         "supervisor",
         "dashboard",
