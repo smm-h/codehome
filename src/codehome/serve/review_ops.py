@@ -13,8 +13,6 @@ import tempfile
 from pathlib import Path
 from typing import Any
 
-from codehome.git import gh_api, gh_env
-from codehome.paths import base_ref, branch_dir, worktree_path
 from codehome.serve.subprocess_utils import run_git, safe_gh_repo
 
 
@@ -98,6 +96,8 @@ def get_review_diff(repo: str, branch: str) -> dict[str, Any]:
 
     Returns {files: [{path, hunks: [{old_start, new_start, lines}]}]}.
     """
+    from codehome.supervisor.paths import base_ref, worktree_path
+
     wt = worktree_path(repo, branch)
     if not wt.is_dir():
         return {"files": []}
@@ -117,6 +117,8 @@ def get_review_gaps(repo: str, branch: str) -> list[dict[str, Any]]:
     ## RIGHT/LEFT heading is considered covered. Returns uncovered hunks
     as [{file, line, hunk_preview}].
     """
+    from codehome.supervisor.paths import base_ref, branch_dir, worktree_path
+
     wt = worktree_path(repo, branch)
     if not wt.is_dir():
         return []
@@ -185,6 +187,8 @@ def get_review_gaps(repo: str, branch: str) -> list[dict[str, Any]]:
 
 def read_review_md(repo: str, branch: str) -> str:
     """Read review.md content from the branch context directory."""
+    from codehome.supervisor.paths import branch_dir
+
     bd = branch_dir(repo, branch)
     review_path = bd / "review.md"
     if review_path.is_file():
@@ -194,6 +198,8 @@ def read_review_md(repo: str, branch: str) -> str:
 
 def save_review_md(repo: str, branch: str, content: str) -> None:
     """Write review.md to the branch context directory."""
+    from codehome.supervisor.paths import branch_dir
+
     bd = branch_dir(repo, branch)
     if not bd.is_dir():
         bd.mkdir(parents=True, exist_ok=True)
@@ -212,6 +218,8 @@ def _find_pr(repo: str, branch: str, *, gh_token: str | None = None) -> int:
     Replicates the logic from commands/review.py but accepts repo as a
     parameter instead of using module-level state.
     """
+    from codehome.supervisor.git import gh_env
+
     gh = safe_gh_repo(repo)
     if not gh:
         msg = f"Cannot resolve GitHub repo for '{repo}'"
@@ -250,6 +258,8 @@ def _head_sha(repo: str, pr: int, *, gh_token: str | None = None) -> str:
     if not gh:
         msg = f"Cannot resolve GitHub repo for '{repo}'"
         raise ValueError(msg)
+    from codehome.supervisor.git import gh_api
+
     result = gh_api(f"repos/{gh}/pulls/{pr}", "--jq", ".head.sha", gh_token=gh_token)
     sha = result.stdout.strip()
     if not sha:
@@ -321,6 +331,8 @@ def post_review(repo: str, branch: str, dry_run: bool = False, *, gh_token: str 
     If dry_run is True, returns a preview without posting.
     Returns {"comments_posted": int, "comments": [...]}.
     """
+    from codehome.supervisor.paths import branch_dir
+
     bd = branch_dir(repo, branch)
     review_file = bd / "review.md"
     if not review_file.is_file():
@@ -353,6 +365,8 @@ def post_review(repo: str, branch: str, dry_run: bool = False, *, gh_token: str 
 
     if dry_run:
         return {"comments_posted": 0, "dry_run": True, "comments": preview}
+
+    from codehome.supervisor.git import gh_api
 
     gh = safe_gh_repo(repo)
     if not gh:
@@ -419,6 +433,8 @@ def resolve_threads(repo: str, branch: str, *, gh_token: str | None = None) -> d
     if not gh:
         msg = f"Cannot resolve GitHub repo for '{repo}'"
         raise ValueError(msg)
+    from codehome.supervisor.git import gh_env
+
     owner, name = gh.split("/", 1)
     env = gh_env(gh_token)
 

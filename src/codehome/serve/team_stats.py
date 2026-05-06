@@ -19,8 +19,7 @@ import time
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
-from codehome.config import load_repos
-from codehome.paths import repo_anchor, repo_branches, resolve_global, codehome_home
+from codehome.paths import resolve_global, codehome_home
 from codehome.serve.logging_config import get_logger
 from codehome.serve.roster import TeamMember, all_members
 from codehome.serve.subprocess_utils import run_gh, run_git, safe_gh_repo
@@ -40,6 +39,8 @@ def _find_worktree(repo: str) -> Path | None:
     Prefers the production/base branch worktree (the anchor), falls back
     to any existing worktree directory under the repo's branches/.
     """
+    from codehome.supervisor.paths import repo_anchor, repo_branches
+
     anchor = repo_anchor(repo)
     if anchor.exists():
         return anchor
@@ -60,7 +61,9 @@ def _find_worktree(repo: str) -> Path | None:
 
 def _all_repo_names() -> list[str]:
     """Return names of all configured repos."""
-    return sorted(load_repos().keys())
+    from codehome.supervisor.repo_config import load_repos as _load_repos
+
+    return sorted(_load_repos().keys())
 
 
 def collect_git_stats(member: TeamMember) -> dict[str, Any]:

@@ -10,7 +10,6 @@ import json
 import shutil
 from typing import TYPE_CHECKING, Any
 
-from codehome.paths import branch_dir, repo_dir, worktree_path
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -18,11 +17,15 @@ if TYPE_CHECKING:
 
 def _services_json_path(repo: str, branch: str) -> Path:
     """Path to the branch-level service config."""
+    from codehome.supervisor.paths import branch_dir
+
     return branch_dir(repo, branch) / ".services.json"
 
 
 def _template_path(repo: str) -> Path:
     """Path to the repo-level service template."""
+    from codehome.supervisor.paths import repo_dir
+
     return repo_dir(repo) / ".services.template.json"
 
 
@@ -58,6 +61,8 @@ def resolve_placeholders(
 
     Returns a new list of dicts with resolved values and computed keys.
     """
+    from codehome.supervisor.paths import worktree_path
+
     wt = str(worktree_path(repo, branch))
     resolved = []
     for svc in service_defs:

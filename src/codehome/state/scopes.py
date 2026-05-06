@@ -3,7 +3,7 @@
 from enum import StrEnum
 from pathlib import Path
 
-from codehome.paths import SUPERVISOR_DIR, branch_dir, repo_dir, codehome_home
+from codehome.paths import SUPERVISOR_DIR, codehome_home
 
 
 class Scope(StrEnum):
@@ -37,10 +37,14 @@ def resolve_path(
         case Scope.REPO:
             if not repo:
                 raise ValueError("repo required for REPO scope")
+            from codehome.supervisor.paths import repo_dir
+
             return repo_dir(repo) / ".supervisor" / "plugins" / plugin
         case Scope.BRANCH:
             if not repo or not branch:
                 raise ValueError("repo and branch required for BRANCH scope")
+            from codehome.supervisor.paths import branch_dir
+
             return branch_dir(repo, branch) / ".supervisor" / "plugins" / plugin
         case Scope.SECRET:
             new = codehome_home() / "credentials" / plugin

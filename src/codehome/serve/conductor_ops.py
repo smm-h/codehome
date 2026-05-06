@@ -11,7 +11,6 @@ from typing import Any
 
 from codehome.bus import Event
 from codehome.bus import fire as bus_fire
-from codehome.paths import worktree_path as _wtp
 from codehome.serve.agent_dispatch import create_agent_token
 from codehome.serve.agent_sessions import AgentSessionManager
 from codehome.serve.conductor import (
@@ -48,6 +47,8 @@ def resolve_worktree(qualified_branch: str) -> tuple[str, str, Path]:
     """
     if ":" not in qualified_branch:
         raise ValueError("Branch must be qualified (repo:branch)")
+
+    from codehome.supervisor.paths import worktree_path as _wtp
 
     repo, branch = qualified_branch.split(":", 1)
     wt = _wtp(repo, branch)
@@ -251,6 +252,8 @@ def op_execute_plan(
     if plan.status not in ("pending", "paused"):
         raise ValueError(f"Cannot execute plan in '{plan.status}' state")
 
+    from codehome.supervisor.paths import worktree_path as _wtp
+
     repo, branch = qualified.split(":", 1)
     wt = str(_wtp(repo, branch))
     server_url = f"http://127.0.0.1:{port}"
@@ -294,6 +297,8 @@ def op_resume_plan(
         raise KeyError("Plan not found")
     if plan.status != "paused":
         raise ValueError(f"Cannot resume plan in '{plan.status}' state")
+
+    from codehome.supervisor.paths import worktree_path as _wtp
 
     repo, branch = qualified.split(":", 1)
     wt = str(_wtp(repo, branch))

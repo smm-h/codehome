@@ -17,8 +17,6 @@ if TYPE_CHECKING:
 
 from codehome.bus import Event
 from codehome.bus import fire as bus_fire
-from codehome.config import load_repos
-from codehome.paths import repo_anchor
 from codehome.serve.logging_config import get_logger
 from codehome.serve.remote_branches import EXCLUDE_BRANCHES
 
@@ -122,7 +120,9 @@ class FetchScheduler:
 
     async def fetch_all(self) -> dict[str, dict[str, Any]]:
         """Fetch all configured repos. Returns {repo: diff_result}."""
-        repos = await asyncio.to_thread(load_repos)
+        from codehome.supervisor.repo_config import load_repos as _load_repos
+
+        repos = await asyncio.to_thread(_load_repos)
         results: dict[str, dict[str, Any]] = {}
         for repo_name in repos:
             try:
@@ -145,6 +145,8 @@ class FetchScheduler:
             last = self._last_fetch.get(repo_name, 0)
             if not force and (now - last < _COOLDOWN_SECS):
                 return None
+
+            from codehome.supervisor.paths import repo_anchor
 
             anchor = await asyncio.to_thread(repo_anchor, repo_name)
             if not await asyncio.to_thread(_path_exists, anchor):

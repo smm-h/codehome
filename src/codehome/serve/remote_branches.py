@@ -9,9 +9,6 @@ import json
 import time
 from typing import Any
 
-from codehome.config import load_repos
-from codehome.git import git
-from codehome.paths import repo_anchor, worktree_path
 from codehome.serve.logging_config import get_logger
 from codehome.serve.roster import resolve
 from codehome.serve.subprocess_utils import run_gh, safe_gh_repo
@@ -72,7 +69,11 @@ def list_remote_branches(repo_filter: str | None = None) -> list[dict[str, Any]]
     Returns a list of dicts matching the RemoteBranch response shape.
     Runs blocking git and gh subprocess calls.
     """
-    repos = load_repos()
+    from codehome.supervisor.git import git
+    from codehome.supervisor.paths import repo_anchor, worktree_path
+    from codehome.supervisor.repo_config import load_repos as _load_repos
+
+    repos = _load_repos()
     if repo_filter:
         if repo_filter not in repos:
             return []

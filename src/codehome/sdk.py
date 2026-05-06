@@ -7,102 +7,135 @@ in Phase 4.
 Provides: paths, resolution, git, config, formatting, events (bus),
 state (Config/State/Files), services (RPC), locking, CLI helpers,
 and FastAPI auth dependencies.
+
+All re-exports are lazy: modules are only imported when the symbol is
+first accessed, via module-level __getattr__ with globals() caching.
 """
 
 from __future__ import annotations
 
+import importlib
 import types
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from pathlib import Path
 
-# -- CLI defaults (module re-export: plugins use `cli_defaults.get(key)`) --
-from codehome import cli_defaults
+# Mapping: symbol_name -> (module_path, attribute_name)
+# When attr_name is None, the module itself is returned (module re-export).
+# When attr_name differs from symbol_name, it acts as a rename
+# (e.g. list_repos -> load_repos).
+_LAZY_IMPORTS: dict[str, tuple[str, str | None]] = {
+    # -- CLI defaults (module re-export: plugins use `cli_defaults.get(key)`) --
+    "cli_defaults": ("codehome.supervisor.cli_defaults", None),
+    # -- Bus (event system) --
+    "Event": ("codehome.bus", "Event"),
+    "fire": ("codehome.bus", "fire"),
+    "fire_sync": ("codehome.bus", "fire_sync"),
+    "on": ("codehome.bus", "on"),
+    # -- CLI construction & helpers --
+    "build_parser": ("codehome.cli", "build_parser"),
+    "add_branch_flag": ("codehome.supervisor.cli_helpers", "add_branch_flag"),
+    "add_deploy_flags": ("codehome.supervisor.cli_helpers", "add_deploy_flags"),
+    "dispatch_subcommand": ("codehome.supervisor.cli_helpers", "dispatch_subcommand"),
+    "resolve_optional": ("codehome.supervisor.cli_helpers", "resolve_optional"),
+    # -- Config --
+    "RepoConfig": ("codehome.supervisor.repo_config", "RepoConfig"),
+    "get_repo": ("codehome.supervisor.repo_config", "get_repo"),
+    "load_server_config": ("codehome.config", "load_server_config"),
+    "list_repos": ("codehome.supervisor.repo_config", "load_repos"),  # renamed re-export
+    # -- Dispatch --
+    "dispatched": ("codehome.supervisor.dispatch", "dispatched"),
+    "server_running": ("codehome.supervisor.dispatch", "server_running"),
+    "server_url": ("codehome.supervisor.dispatch", "server_url"),
+    # -- Git operations --
+    "delete_local_branch": ("codehome.supervisor.git", "delete_local_branch"),
+    "delete_remote_branch": ("codehome.supervisor.git", "delete_remote_branch"),
+    "gh_api": ("codehome.supervisor.git", "gh_api"),
+    "gh_repo": ("codehome.supervisor.git", "gh_repo"),
+    "git": ("codehome.supervisor.git", "git"),
+    "git_passthrough": ("codehome.supervisor.git", "git_passthrough"),
+    "is_worktree_locked": ("codehome.supervisor.git", "is_worktree_locked"),
+    "list_worktrees": ("codehome.supervisor.git", "list_worktrees"),
+    "require_fresh": ("codehome.supervisor.git", "require_fresh"),
+    "require_unlocked": ("codehome.supervisor.git", "require_unlocked"),
+    # -- HTTP client --
+    "TOKEN_FILE": ("codehome.http_client", "TOKEN_FILE"),
+    # -- Paths (core) --
+    "PROTECTED_BRANCHES": ("codehome.paths", "PROTECTED_BRANCHES"),
+    "ROOT": ("codehome.paths", "ROOT"),
+    "STAGING_MERGE_STATE": ("codehome.paths", "STAGING_MERGE_STATE"),
+    "SUPERVISOR_DIR": ("codehome.paths", "SUPERVISOR_DIR"),
+    "resolve_global": ("codehome.paths", "resolve_global"),
+    "codehome_home": ("codehome.paths", "codehome_home"),
+    # -- Paths (supervisor: repo/branch) --
+    "REPOS_DIR": ("codehome.supervisor.paths", "REPOS_DIR"),
+    "base_ref": ("codehome.supervisor.paths", "base_ref"),
+    "branch_dir": ("codehome.supervisor.paths", "branch_dir"),
+    "branch_name_from_wt": ("codehome.supervisor.paths", "branch_name_from_wt"),
+    "prod_ref": ("codehome.supervisor.paths", "prod_ref"),
+    "repo_anchor": ("codehome.supervisor.paths", "repo_anchor"),
+    "repo_branches": ("codehome.supervisor.paths", "repo_branches"),
+    "repo_dir": ("codehome.supervisor.paths", "repo_dir"),
+    "staging_worktree": ("codehome.supervisor.paths", "staging_worktree"),
+    "tests_file": ("codehome.supervisor.paths", "tests_file"),
+    "worktree_path": ("codehome.supervisor.paths", "worktree_path"),
+    # -- Resolution --
+    "BranchContext": ("codehome.supervisor.resolution", "BranchContext"),
+    "active_context": ("codehome.supervisor.resolution", "active_context"),
+    "parse_qualified": ("codehome.supervisor.resolution", "parse_qualified"),
+    "resolve": ("codehome.supervisor.resolution", "resolve"),
+    # -- Serve --
+    "read_server_url": ("codehome.serve", "read_server_url"),
+    # -- FastAPI auth dependencies (for plugin routes) --
+    "get_current_user": ("codehome.serve.auth_deps", "get_current_user"),
+    "get_gh_token": ("codehome.serve.dependencies", "get_gh_token"),
+    # -- SDUI streaming command types + CLI runner --
+    "run_command": ("codehome.serve.sdui.cli_runner", "run_command"),
+    "CommandError": ("codehome.serve.sdui.commands", "CommandError"),
+    "CommandProgress": ("codehome.serve.sdui.commands", "CommandProgress"),
+    "CommandResult": ("codehome.serve.sdui.commands", "CommandResult"),
+    # -- Session --
+    "get_process_id": ("codehome.supervisor.session", "get_process_id"),
+    # -- State (storage APIs) --
+    "ConfigStore": ("codehome.state", "ConfigStore"),
+    "FileStore": ("codehome.state", "FileStore"),
+    "Scope": ("codehome.state", "Scope"),
+    "StateStore": ("codehome.state", "StateStore"),
+    "lock": ("codehome.state", "lock"),
+    "services": ("codehome.state", "services"),
+    # -- Utils --
+    "USE_COLOR": ("codehome.utils", "USE_COLOR"),
+    "atomic_json_write": ("codehome.utils", "atomic_json_write"),
+    "blue": ("codehome.utils", "blue"),
+    "bold": ("codehome.utils", "bold"),
+    "cyan": ("codehome.utils", "cyan"),
+    "die": ("codehome.utils", "die"),
+    "dim": ("codehome.utils", "dim"),
+    "green": ("codehome.utils", "green"),
+    "load_json": ("codehome.utils", "load_json"),
+    "magenta": ("codehome.utils", "magenta"),
+    "open_url": ("codehome.utils", "open_url"),
+    "red": ("codehome.utils", "red"),
+    "render_box_table": ("codehome.utils", "render_box_table"),
+    "warn": ("codehome.utils", "warn"),
+    "yellow": ("codehome.utils", "yellow"),
+}
 
-# -- Bus (event system) --
-from codehome.bus import Event, fire, fire_sync, on
 
-# -- CLI construction & helpers --
-from codehome.cli import build_parser
-from codehome.cli_helpers import add_branch_flag, add_deploy_flags, dispatch_subcommand, resolve_optional
-from codehome.config import RepoConfig, get_repo, load_server_config
-from codehome.config import (  # Original name is load_repos; renamed to list_repos for SDK
-    load_repos as list_repos,
-)
-from codehome.dispatch import dispatched, server_running, server_url
-
-# -- Git operations --
-from codehome.git import (
-    delete_local_branch,
-    delete_remote_branch,
-    gh_api,
-    gh_repo,
-    git,
-    git_passthrough,
-    is_worktree_locked,
-    list_worktrees,
-    require_fresh,
-    require_unlocked,
-)
-from codehome.http_client import TOKEN_FILE
-
-# -- Paths --
-from codehome.paths import (
-    PROTECTED_BRANCHES,
-    REPOS_DIR,
-    ROOT,
-    STAGING_MERGE_STATE,
-    SUPERVISOR_DIR,
-    base_ref,
-    branch_dir,
-    branch_name_from_wt,
-    prod_ref,
-    repo_anchor,
-    repo_branches,
-    repo_dir,
-    resolve_global,
-    staging_worktree,
-    codehome_home,
-    tests_file,
-    worktree_path,
-)
-from codehome.resolution import (
-    BranchContext,
-    active_context,
-    parse_qualified,
-    resolve,
-)
-from codehome.serve import read_server_url
-
-# -- FastAPI auth dependencies (for plugin routes) --
-from codehome.serve.auth_deps import get_current_user
-from codehome.serve.dependencies import get_gh_token
-
-# -- SDUI streaming command types + CLI runner --
-from codehome.serve.sdui.cli_runner import run_command
-from codehome.serve.sdui.commands import CommandError, CommandProgress, CommandResult
-from codehome.session import get_process_id
-
-# -- State (storage APIs) --
-from codehome.state import ConfigStore, FileStore, Scope, StateStore, lock, services
-from codehome.utils import (
-    USE_COLOR,
-    atomic_json_write,
-    blue,
-    bold,
-    cyan,
-    die,
-    dim,
-    green,
-    load_json,
-    magenta,
-    open_url,
-    red,
-    render_box_table,
-    warn,
-    yellow,
-)
+def __getattr__(name: str):
+    """Lazy import: resolve symbols on first access, then cache in globals()."""
+    if name in _LAZY_IMPORTS:
+        module_path, attr_name = _LAZY_IMPORTS[name]
+        mod = importlib.import_module(module_path)
+        if attr_name is None:
+            val = mod  # module re-export
+        else:
+            val = getattr(mod, attr_name)
+        # Cache in module globals so __getattr__ isn't called again
+        globals()[name] = val
+        return val
+    raise AttributeError(f"module 'codehome.sdk' has no attribute {name!r}")
 
 
 def load_sibling(name: str, caller_file: str, *, cache: bool = False) -> types.ModuleType:
@@ -152,6 +185,9 @@ def get_plugin_cache_dir(plugin_name: str, key: str) -> Path:
     Checks the new location (~/.codehome/<plugin>/<key>) first,
     falls back to the legacy location (.supervisor/<plugin>/<key>).
     If neither exists, returns the new location.
+
+    References to codehome_home and SUPERVISOR_DIR resolve lazily via
+    module-level __getattr__ at call time.
     """
     from pathlib import Path as _Path
 

@@ -16,7 +16,6 @@ import re
 import urllib.request
 from typing import Any
 
-from codehome.paths import branch_dir
 from codehome.serve.logging_config import get_logger
 from codehome.serve.providers.registry import register
 
@@ -47,6 +46,8 @@ def _read_figma_link(branch: str, repo: str) -> str | None:
     Returns the raw URL string, or None if the file doesn't exist or
     is empty.
     """
+    from codehome.supervisor.paths import branch_dir
+
     link_file = branch_dir(repo, branch) / ".figma"
     if not link_file.is_file():
         return None

@@ -21,7 +21,6 @@ import time
 from pathlib import Path
 
 from codehome.bus import Event, fire
-from codehome.paths import worktree_path
 from codehome.serve import supabase as sb
 from codehome.serve.ports import ports
 from codehome.serve.services import ServiceInstance, State, services
@@ -161,6 +160,8 @@ async def discover_running() -> None:
         # Supabase is running -- re-register with full connection metadata.
         # Resolve worktree path from branch name so stop helpers can find it.
         key = f"{branch}/supabase"
+        from codehome.supervisor.paths import worktree_path
+
         repo, br = branch.split(":", 1)
         wt_path = worktree_path(repo, br)
         wt = str(wt_path)

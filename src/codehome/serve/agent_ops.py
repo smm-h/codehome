@@ -27,7 +27,7 @@ def _resolve_worktree(qualified: str) -> tuple[str, str, Path]:
 
     Raises FileNotFoundError if the worktree directory doesn't exist.
     """
-    from codehome.paths import worktree_path as _wtp
+    from codehome.supervisor.paths import worktree_path as _wtp
 
     repo, branch = qualified.split(":", 1)
     wt = _wtp(repo, branch)

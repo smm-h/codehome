@@ -12,14 +12,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from codehome.config import list_repos
-from codehome.paths import (
-    PROTECTED_BRANCHES,
-    branch_dir,
-    prod_ref,
-    repo_branches,
-    worktree_path,
-)
+from codehome.paths import PROTECTED_BRANCHES
 from codehome.utils import load_json
 
 
@@ -48,8 +41,11 @@ def list_branches() -> list[dict[str, Any]]:
     Skips protected branches (production, staging, main) and hidden
     dirs (e.g. .staging). No git commands -- fast and safe.
     """
+    from codehome.supervisor.repo_config import list_repos as _list_repos
+    from codehome.supervisor.paths import branch_dir, repo_branches, worktree_path
+
     results = []
-    for repo_cfg in list_repos():
+    for repo_cfg in _list_repos():
         repo = repo_cfg.name
         branches_root = repo_branches(repo)
         if not branches_root.is_dir():
@@ -116,6 +112,8 @@ def get_branch_detail(qualified: str) -> dict[str, Any] | None:
 
     Returns None if the branch directory doesn't exist.
     """
+    from codehome.supervisor.paths import branch_dir, worktree_path
+
     repo, branch = _parse_qualified(qualified)
     bd = branch_dir(repo, branch)
     if not bd.is_dir():
@@ -173,6 +171,8 @@ def _last_commit_timestamp(wt: Path) -> float | None:
 
 def get_branch_attention(qualified: str) -> list[dict[str, Any]]:
     """Return attention items for a branch (things that need action)."""
+    from codehome.supervisor.paths import branch_dir, worktree_path
+
     repo, branch = _parse_qualified(qualified)
     bd = branch_dir(repo, branch)
     if not bd.is_dir():
@@ -249,6 +249,8 @@ def _git_output(wt: Path, *args: str, timeout: int = 10) -> str:
 
 def _collect_git_data(repo: str, branch: str, wt: Path) -> dict[str, Any]:
     """Gather all git stats for a single worktree. Runs multiple git commands."""
+    from codehome.supervisor.paths import prod_ref
+
     ref = prod_ref(repo)
 
     behind = _git_count(wt, "rev-list", "--count", f"HEAD..{ref}")
@@ -372,6 +374,8 @@ def _collect_branch_table_row(
     reverse_alias_map: dict[str, Any],
 ) -> dict[str, Any]:
     """Collect all table data for a single branch. Designed to run in a thread."""
+    from codehome.supervisor.paths import branch_dir, worktree_path
+
     qualified = f"{repo}:{branch}"
     bd = branch_dir(repo, branch)
     wt = worktree_path(repo, branch)
@@ -556,6 +560,8 @@ def get_branches_table() -> list[dict[str, Any]]:
     cache and PR data from prs.json -- no external API calls.
     """
     from codehome.supervisor.aliases import reverse_aliases
+    from codehome.supervisor.paths import repo_branches
+    from codehome.supervisor.repo_config import list_repos as _list_repos
     from codehome.linear.linear_shared import load_cache as load_linear_cache
 
     # Load shared data once (read by all threads).
@@ -565,7 +571,7 @@ def get_branches_table() -> list[dict[str, Any]]:
     branch_list: list[tuple[str, str]] = []  # (repo, branch_name)
     all_reverse_aliases: dict[str, dict[str, list[str]]] = {}
 
-    for repo_cfg in list_repos():
+    for repo_cfg in _list_repos():
         repo = repo_cfg.name
         branches_root = repo_branches(repo)
         if not branches_root.is_dir():

@@ -75,11 +75,11 @@ def run_gh(*args: str, timeout: int = 30, gh_token: str | None = None) -> tuple[
 def safe_gh_repo(repo: str) -> str | None:
     """Resolve owner/repo string, returning None instead of exiting.
 
-    Wraps ``gh_repo()`` from ``codehome.git`` which calls ``sys.exit()``
+    Wraps ``gh_repo()`` from ``codehome.supervisor.git`` which calls ``sys.exit()``
     on failure (via ``die()``). Returns the owner/repo string on success
     or None if resolution fails.
     """
-    from codehome.git import gh_repo
+    from codehome.supervisor.git import gh_repo
 
     try:
         return gh_repo(repo)

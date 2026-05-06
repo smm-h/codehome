@@ -7,7 +7,6 @@ import os
 import subprocess
 from typing import TYPE_CHECKING
 
-from codehome.paths import repo_dir
 from codehome.serve.supabase import read_supabase_version
 
 if TYPE_CHECKING:
@@ -23,9 +22,18 @@ TIMEOUT_COMPOSE_PS = 30
 TIMEOUT_VOLUME_RM = 30
 
 # Docker compose files live at repos/bag/docker/.
-DOCKER_DIR = repo_dir("bag") / "docker"
-COMPOSE_FILE = DOCKER_DIR / "compose.yml"
-COMPOSE_TDD_FILE = DOCKER_DIR / "compose.tdd.yml"
+# Lazy to avoid top-level plugin import (repo_dir is in supervisor plugin).
+def _docker_dir() -> "Path":
+    from codehome.supervisor.paths import repo_dir
+    return repo_dir("bag") / "docker"
+
+
+def _compose_file() -> "Path":
+    return _docker_dir() / "compose.yml"
+
+
+def _compose_tdd_file() -> "Path":
+    return _docker_dir() / "compose.tdd.yml"
 
 
 def compose_project_name(branch: str) -> str:
@@ -51,9 +59,9 @@ def compose_up(
 ) -> tuple[bool, str]:
     """Start a Compose service. Returns (success, message)."""
     project = compose_project_name(branch)
-    cmd = ["docker", "compose", "-p", project, "-f", str(COMPOSE_FILE)]
+    cmd = ["docker", "compose", "-p", project, "-f", str(_compose_file())]
     if tdd:
-        cmd += ["-f", str(COMPOSE_TDD_FILE)]
+        cmd += ["-f", str(_compose_tdd_file())]
     cmd += ["up", "-d", "--build", service]
 
     try:
@@ -82,9 +90,9 @@ def compose_down(
     project = compose_project_name(branch)
 
     def _base_cmd() -> list[str]:
-        cmd = ["docker", "compose", "-p", project, "-f", str(COMPOSE_FILE)]
+        cmd = ["docker", "compose", "-p", project, "-f", str(_compose_file())]
         if tdd:
-            cmd += ["-f", str(COMPOSE_TDD_FILE)]
+            cmd += ["-f", str(_compose_tdd_file())]
         return cmd
 
     try:
@@ -273,9 +281,9 @@ def docker_inspect_compose_containers() -> list[dict[str, object]]:
 def compose_ps(branch: str, tdd: bool = False) -> list[dict[str, str]]:
     """List running containers for a branch's project."""
     project = compose_project_name(branch)
-    cmd = ["docker", "compose", "-p", project, "-f", str(COMPOSE_FILE)]
+    cmd = ["docker", "compose", "-p", project, "-f", str(_compose_file())]
     if tdd:
-        cmd += ["-f", str(COMPOSE_TDD_FILE)]
+        cmd += ["-f", str(_compose_tdd_file())]
     cmd += ["ps", "--format", "json"]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True, timeout=TIMEOUT_COMPOSE_PS)
@@ -376,9 +384,9 @@ def compose_up_streaming(
     from codehome.serve.subprocess_utils import run_streaming
 
     project = compose_project_name(branch)
-    cmd = ["docker", "compose", "-p", project, "-f", str(COMPOSE_FILE)]
+    cmd = ["docker", "compose", "-p", project, "-f", str(_compose_file())]
     if tdd:
-        cmd += ["-f", str(COMPOSE_TDD_FILE)]
+        cmd += ["-f", str(_compose_tdd_file())]
     cmd += ["up", "-d", "--build", service]
     ok, msg = run_streaming(cmd, callback, env=env, timeout=TIMEOUT_COMPOSE_UP)
     if ok:
@@ -399,9 +407,9 @@ def compose_down_streaming(
     project = compose_project_name(branch)
 
     def _base_cmd() -> list[str]:
-        cmd = ["docker", "compose", "-p", project, "-f", str(COMPOSE_FILE)]
+        cmd = ["docker", "compose", "-p", project, "-f", str(_compose_file())]
         if tdd:
-            cmd += ["-f", str(COMPOSE_TDD_FILE)]
+            cmd += ["-f", str(_compose_tdd_file())]
         return cmd
 
     if service:
@@ -500,7 +508,7 @@ def build_vite_env(
     env_local = app_src / ".env.local"
     env = {
         "PROJECT_NAME": compose_project_name(branch),
-        "DOCKER_DIR": str(DOCKER_DIR),
+        "_docker_dir()": str(_docker_dir()),
         "SUPABASE_API_PORT": str(supabase_api_port),
         "SUPABASE_ANON_KEY": supabase_anon_key,
     }
@@ -515,7 +523,7 @@ def build_vite_env(
     else:
         env["VITE_PORT"] = str(vite_port)
         env["APP_SRC"] = str(app_src)
-        env["ENV_LOCAL_PATH"] = str(env_local) if env_local.exists() else str(DOCKER_DIR / ".env.placeholder")
+        env["ENV_LOCAL_PATH"] = str(env_local) if env_local.exists() else str(_docker_dir() / ".env.placeholder")
     return env
 
 
@@ -534,7 +542,7 @@ def build_functions_env(
     functions_src = str(worktree / "supabase" / "functions")
     env = {
         "PROJECT_NAME": compose_project_name(branch),
-        "DOCKER_DIR": str(DOCKER_DIR),
+        "_docker_dir()": str(_docker_dir()),
         "SUPABASE_API_PORT": str(supabase_api_port),
         "SUPABASE_ANON_KEY": supabase_anon_key,
         "SUPABASE_SERVICE_ROLE_KEY": supabase_service_role_key,

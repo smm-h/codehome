@@ -8,7 +8,7 @@ Errors return empty/error results instead of raising.
 from pathlib import Path
 from typing import Any
 
-from codehome.paths import NOISE_PATTERNS, base_ref, worktree_path
+from codehome.paths import NOISE_PATTERNS
 from codehome.serve.subprocess_utils import parse_numstat_line, run_git
 
 
@@ -19,6 +19,8 @@ def _exclude_args() -> list[str]:
 
 def _resolve_worktree(repo: str, branch: str) -> Path | None:
     """Return worktree path if it exists, else None."""
+    from codehome.supervisor.paths import worktree_path
+
     wt = worktree_path(repo, branch)
     return wt if wt.is_dir() else None
 
@@ -28,6 +30,8 @@ def get_diff(repo: str, branch: str) -> dict[str, Any]:
 
     Returns {files: [{path, status, additions, deletions}], patch: str}.
     """
+    from codehome.supervisor.paths import base_ref
+
     wt = _resolve_worktree(repo, branch)
     if not wt:
         return {"files": [], "patch": ""}
@@ -76,6 +80,8 @@ def get_changes(repo: str, branch: str) -> list[dict[str, Any]]:
 
     Returns [{path, status, additions, deletions}].
     """
+    from codehome.supervisor.paths import base_ref
+
     wt = _resolve_worktree(repo, branch)
     if not wt:
         return []
@@ -165,6 +171,8 @@ def get_commits(repo: str, branch: str) -> list[dict[str, Any]]:
 
     Returns [{hash, short, author, date, message}], newest first.
     """
+    from codehome.supervisor.paths import base_ref
+
     wt = _resolve_worktree(repo, branch)
     if not wt:
         return []
@@ -330,6 +338,8 @@ def get_file_diff(
         # Cross-branch compare: caller supplies the ref range directly.
         out, _, _ = run_git(wt, "diff", compare_ref, "--", file_path)
     else:
+        from codehome.supervisor.paths import base_ref
+
         ref = base_ref(repo, branch)
         out, _, _ = run_git(wt, "diff", f"{ref}...HEAD", "--", file_path)
     return out
