@@ -284,7 +284,7 @@ async def discover_docker() -> list[dict[str, object]]:
     ``POST /api/services/discover`` endpoint.
     """
     from codehome.serve import docker as dk
-    from codehome.serve.branches import list_branches
+    from codehome.supervisor.ops.branches import list_branches
 
     # 1. List candidate containers.  Offload to a thread -- subprocess I/O.
     containers = await asyncio.to_thread(dk.docker_inspect_compose_containers)

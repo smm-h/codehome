@@ -12,7 +12,7 @@ from codehome.serve.supabase import read_supabase_version
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from codehome.serve.subprocess_utils import OutputCallback
+    from codehome.supervisor.ops.subprocess_utils import OutputCallback
 
 # Subprocess timeouts (seconds) — configurable.
 TIMEOUT_COMPOSE_UP = 300
@@ -381,7 +381,7 @@ def compose_up_streaming(
     tdd: bool = False,
 ) -> tuple[bool, str]:
     """Start a Compose service with line-by-line output streaming."""
-    from codehome.serve.subprocess_utils import run_streaming
+    from codehome.supervisor.ops.subprocess_utils import run_streaming
 
     project = compose_project_name(branch)
     cmd = ["docker", "compose", "-p", project, "-f", str(_compose_file())]
@@ -402,7 +402,7 @@ def compose_down_streaming(
     remove_volumes: bool = False,
 ) -> tuple[bool, str]:
     """Stop Compose service(s) with line-by-line output streaming."""
-    from codehome.serve.subprocess_utils import run_streaming
+    from codehome.supervisor.ops.subprocess_utils import run_streaming
 
     project = compose_project_name(branch)
 
@@ -446,7 +446,7 @@ def compose_native_up_streaming(
     callback: OutputCallback,
 ) -> tuple[bool, str]:
     """Start a native compose service with line-by-line output streaming."""
-    from codehome.serve.subprocess_utils import run_streaming
+    from codehome.supervisor.ops.subprocess_utils import run_streaming
 
     cmd = [
         "docker",
@@ -473,7 +473,7 @@ def compose_native_down_streaming(
     callback: OutputCallback,
 ) -> tuple[bool, str]:
     """Stop a native compose service with line-by-line output streaming."""
-    from codehome.serve.subprocess_utils import run_streaming
+    from codehome.supervisor.ops.subprocess_utils import run_streaming
 
     ok, msg = run_streaming(
         ["docker", "compose", "-f", str(compose_file), "-p", project_name, "stop", service_name],

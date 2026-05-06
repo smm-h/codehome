@@ -18,8 +18,6 @@ if TYPE_CHECKING:
 from codehome.bus import Event
 from codehome.bus import fire as bus_fire
 from codehome.serve.logging_config import get_logger
-from codehome.serve.remote_branches import EXCLUDE_BRANCHES
-
 log = get_logger(component="fetch_scheduler")
 
 # Minimum seconds between fetches for the same repo (even if manually triggered).
@@ -38,6 +36,8 @@ def _git_fetch(anchor: Path) -> bool:
 
 def _get_remote_branches(anchor: Path) -> set[str]:
     """Return the set of remote branch names (excluding infrastructure refs)."""
+    from codehome.supervisor.ops.remote_branches import EXCLUDE_BRANCHES
+
     result = subprocess.run(
         ["git", "-C", str(anchor), "for-each-ref", "--format=%(refname:short)", "refs/remotes/origin/"],
         capture_output=True,
