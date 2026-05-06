@@ -87,8 +87,28 @@ async def logout(response: Response) -> object:
 
 
 @router.get("/api/auth/me")
-async def auth_me(user: dict[str, Any] = Depends(get_current_user)) -> object:
+async def auth_me(
+    request: Request,
+    response: Response,
+    user: dict[str, Any] = Depends(get_current_user),
+) -> object:
     """Return the current user's identity from their token."""
+    if getattr(request.state, "_auth_from_token_file", False):
+        token = TOKEN_FILE.read_text().strip()
+        response.set_cookie(
+            key="session",
+            value=token,
+            httponly=True,
+            samesite="lax",
+            max_age=86400,
+        )
+        response.set_cookie(
+            key="csrf_token",
+            value=generate_csrf_token(),
+            httponly=False,
+            samesite="lax",
+            max_age=86400,
+        )
     return {"username": user["sub"], "role": user["role"]}
 
 

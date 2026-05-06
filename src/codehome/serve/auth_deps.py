@@ -49,11 +49,14 @@ async def get_current_user(
     # Fallback: read CLI token file (~/.codehome/token or ~/.supervisor/token)
     # so that CLI login automatically works in the browser without a separate
     # dashboard login.
+    from_token_file = False
     if not token:
         try:
             tf = _resolve_token_file()
             if tf.is_file():
                 token = tf.read_text().strip() or None
+                if token:
+                    from_token_file = True
         except OSError:
             log.debug("Could not read CLI token file")
 
@@ -68,6 +71,7 @@ async def get_current_user(
     # Store on request.state so the timing middleware can log the user and
     # Sentry can attach user context to error reports.
     request.state._user = claims
+    request.state._auth_from_token_file = from_token_file
     username = claims.get("sub")
     if username:
         set_user_context(username)
