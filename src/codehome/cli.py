@@ -125,6 +125,10 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_as = auth_sub.add_parser("setup", help="one-time server bootstrap wizard")
     p_as.set_defaults(_cmd=("codehome.commands.setup", "cmd_setup"))
+    p_as.add_argument("--username", help="admin username (skip interactive prompt)")
+    p_as.add_argument("--password", help="admin password (skip interactive prompt)")
+    p_as.add_argument("--port", type=int, help="server port (default: 9100)")
+    p_as.add_argument("--jwt-secret", help="JWT secret (auto-generated if omitted)")
 
     # -- server lifecycle ------------------------------------------------------
     p_server = sub.add_parser("server", help="start the dev server")

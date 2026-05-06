@@ -65,15 +65,24 @@ def cmd_setup(args: argparse.Namespace) -> None:
     if CONFIG_FILE.exists():
         die("Setup already complete. Delete .supervisor/config.json to re-run.")
 
+    flag_username = getattr(args, "username", None)
+    flag_password = getattr(args, "password", None)
+    flag_port = getattr(args, "port", None)
+    flag_jwt_secret = getattr(args, "jwt_secret", None)
+    non_interactive = flag_username and flag_password
+
+    if flag_password and len(flag_password) < 8:
+        die("Password must be at least 8 characters.")
+
     print("=== v setup: server bootstrap ===\n")
 
-    username = _prompt_username()
+    username = flag_username or _prompt_username()
     if not username:
         die("Username cannot be empty.")
 
-    password = _prompt_password()
-    port = _prompt_port()
-    jwt_secret = _prompt_jwt_secret()
+    password = flag_password or _prompt_password()
+    port = flag_port if flag_port is not None else (9100 if non_interactive else _prompt_port())
+    jwt_secret = flag_jwt_secret or secrets.token_urlsafe(32)
 
     # Hash password with bcrypt.
     pw_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
