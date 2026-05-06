@@ -1,7 +1,7 @@
 {
   "name": "codehome",
   "version": "0.1.1",
-  "description": "Plugin-based worktree manager and dev tool orchestrator",
+  "description": "Plugin runtime for dev tools: server, auth, event bus, check framework, and SDK",
   "license": "MIT",
   "bin": {
     "codehome": "bin/cli.js"
@@ -17,11 +17,11 @@
     "node": ">=18"
   },
   "keywords": [
-    "worktree",
     "plugins",
     "dev-tools",
     "cli",
     "codehome",
+    "runtime",
     "rlsbl"
   ],
   "author": "smm-h",
