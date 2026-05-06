@@ -31,7 +31,7 @@ async def get_current_user(
     ``EventSource`` (SSE) cannot set custom headers -- same pattern used by
     the WebSocket terminal endpoint.
 
-    The ``~/.superv/token`` file fallback enables bidirectional auth sync:
+    The ``~/.codehome/token`` file fallback enables bidirectional auth sync:
     logging in via the CLI (which writes this file) automatically authenticates
     the dashboard browser session.
 
@@ -46,7 +46,7 @@ async def get_current_user(
     elif request.query_params.get("token"):
         token = request.query_params["token"]
 
-    # Fallback: read CLI token file (~/.superv/token or ~/.supervisor/token)
+    # Fallback: read CLI token file (~/.codehome/token or ~/.supervisor/token)
     # so that CLI login automatically works in the browser without a separate
     # dashboard login.
     if not token:

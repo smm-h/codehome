@@ -11,12 +11,12 @@ from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from typing import Any
 
-from codehome.paths import resolve_global, superv_home
+from codehome.paths import resolve_global, codehome_home
 from codehome.serve.file_lock import write_json_locked
 
 # Read: dual-path fallback. Write: canonical new location.
 _SESSIONS_DIR_READ = resolve_global("agent-sessions")
-_SESSIONS_DIR_WRITE = superv_home() / "agent-sessions"
+_SESSIONS_DIR_WRITE = codehome_home() / "agent-sessions"
 
 
 @dataclass

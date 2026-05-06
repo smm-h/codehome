@@ -168,6 +168,11 @@ def build_registry() -> EventRegistry:
     reg.register("reveng.status", D, description="RevEng status update")
 
     # ------------------------------------------------------------------
+    # Figma2SDUI (design-to-code pipeline)
+    # ------------------------------------------------------------------
+    reg.register("figma2sdui.graph.updated", D, description="SDUI graph data changed (conversion ran)")
+
+    # ------------------------------------------------------------------
     # Ghosts (registered but never fired in current codebase)
     # ------------------------------------------------------------------
     # old: pipeline:update

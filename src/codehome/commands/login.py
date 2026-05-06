@@ -1,6 +1,6 @@
 """Authentication commands: v login, v logout.
 
-Manages a JWT token stored at ~/.superv/token (with fallback to
+Manages a JWT token stored at ~/.codehome/token (with fallback to
 ~/.supervisor/token for reads).  The token is obtained from the dev
 server's /api/auth/login endpoint.
 """

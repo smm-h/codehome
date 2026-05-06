@@ -13,7 +13,7 @@ from starlette.responses import JSONResponse, StreamingResponse
 
 from codehome.bus import Event
 from codehome.bus import fire as bus_fire
-from codehome.paths import resolve_global, superv_home
+from codehome.paths import resolve_global, codehome_home
 from codehome.serve.dependencies import (
     get_error_log,
     get_event_manager,
@@ -47,8 +47,8 @@ _log = logging.getLogger(__name__)
 # inspector's resolver as a last-resort fallback when the server is
 # unreachable (see ``codehome.inspect.resolver``).  Schema matches the
 # HTTP response exactly so the resolver has a single decoder.
-# Read path: resolve_global checks ~/.superv/ first, falls back to .supervisor/.
-# Write path: write_vite_ports_state_from_registry() writes to ~/.superv/ directly.
+# Read path: resolve_global checks ~/.codehome/ first, falls back to .supervisor/.
+# Write path: write_vite_ports_state_from_registry() writes to ~/.codehome/ directly.
 VITE_PORTS_STATE_FILE: Path = resolve_global("vite-ports.json")
 
 
@@ -102,7 +102,7 @@ async def list_vite_ports(services: ServiceManager = Depends(get_service_manager
 
     This endpoint exists so the DOM inspector (``v inspect``) can resolve
     ``<branch>/<app>/<route>`` shorthand to an absolute URL without requiring
-    a codehome JWT token.  CI, fresh-shell, and unauthenticated agents
+    a supervisor JWT token.  CI, fresh-shell, and unauthenticated agents
     are the intended callers.
 
     Why this is safe to expose without auth:
@@ -178,7 +178,7 @@ def write_vite_ports_state_from_registry() -> None:
 
     entries = _collect_vite_ports(services_singleton)
     try:
-        dest = superv_home() / "vite-ports.json"
+        dest = codehome_home() / "vite-ports.json"
         dest.parent.mkdir(parents=True, exist_ok=True)
         tmp = dest.with_suffix(dest.suffix + ".tmp")
         tmp.write_text(json.dumps(entries, indent=2))

@@ -29,12 +29,12 @@ def _build_mcp_config(
 ) -> dict[str, Any]:
     """Build the MCP config JSON for claude --mcp-config.
 
-    Points to the codehome MCP server module, passing role and context
+    Points to the supervisor MCP server module, passing role and context
     via environment variables.
     """
     return {
         "mcpServers": {
-            "codehome": {
+            "supervisor": {
                 "command": "python3",
                 "args": ["-m", "codehome.mcp.server"],
                 "env": {

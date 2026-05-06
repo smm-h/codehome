@@ -159,9 +159,19 @@ def _maybe_rebuild() -> None:
     """
     import subprocess
 
+    from codehome.plugins import registry as plugin_registry
+
     dashboard_dir = ROOT / "dashboard"
     src_dir = dashboard_dir / "src"
-    build_output = ROOT / "src" / "codehome" / "serve" / "static" / "index.html"
+
+    # Discover the static output dir from the dashboard plugin if loaded;
+    # fall back to the legacy path adjacent to the server module.
+    _plugin = plugin_registry.get("dashboard")
+    if _plugin is not None:
+        _plugin_static = Path(_plugin.plugin_dir) / "static"
+        build_output = _plugin_static / "index.html"
+    else:
+        build_output = ROOT / "src" / "codehome" / "serve" / "static" / "index.html"
 
     if not src_dir.is_dir():
         print(f"Warning: dashboard source dir not found: {src_dir}")
@@ -198,14 +208,14 @@ def _maybe_rebuild() -> None:
 def _ensure_tls_certs() -> tuple[Path, Path]:
     """Generate localhost TLS certs via mkcert.
 
-    Certs are stored in ~/.superv/certs/ (or .supervisor/certs/ for legacy
+    Certs are stored in ~/.codehome/certs/ (or .supervisor/certs/ for legacy
     installs) and reused across restarts. Requires mkcert to be installed.
     """
     import shutil
 
-    from codehome.paths import superv_home
+    from codehome.paths import codehome_home
 
-    # Dual-read: resolve_global checks ~/.superv/ first, falls back to .supervisor/.
+    # Dual-read: resolve_global checks ~/.codehome/ first, falls back to .supervisor/.
     cert_dir = resolve_global("certs")
     cert = cert_dir / "localhost.pem"
     key = cert_dir / "localhost-key.pem"
@@ -218,8 +228,8 @@ def _ensure_tls_certs() -> tuple[Path, Path]:
             "  Then run: mkcert -install\n"
             "  (one-time setup, needs sudo for system trust store)"
         )
-    # New certs are always written to ~/.superv/certs/.
-    cert_dir = superv_home() / "certs"
+    # New certs are always written to ~/.codehome/certs/.
+    cert_dir = codehome_home() / "certs"
     cert = cert_dir / "localhost.pem"
     key = cert_dir / "localhost-key.pem"
     cert_dir.mkdir(parents=True, exist_ok=True)
@@ -417,7 +427,16 @@ def _server_check() -> None:
 
     tf = _resolve_token_file()
     token = tf.read_text().strip() if tf.exists() else None
-    static_dir = Path(__file__).resolve().parent.parent / "serve" / "static"
+
+    # Discover the static dir from the dashboard plugin (same pattern as
+    # _maybe_rebuild and static_files.py); fall back to legacy path.
+    from codehome.plugins import registry as plugin_registry
+
+    _plugin = plugin_registry.get("dashboard")
+    if _plugin is not None:
+        static_dir = Path(_plugin.plugin_dir) / "static"
+    else:
+        static_dir = Path(__file__).resolve().parent.parent / "serve" / "static"
 
     results: list[tuple[str, str, str]] = []  # (name, status, detail)
 

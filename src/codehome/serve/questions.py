@@ -10,12 +10,12 @@ import uuid
 from dataclasses import asdict, dataclass
 from datetime import UTC, datetime
 
-from codehome.paths import resolve_global, superv_home
+from codehome.paths import resolve_global, codehome_home
 from codehome.serve.file_lock import write_json_locked
 
 # Read: dual-path fallback. Write: canonical new location.
 _QUESTIONS_DIR_READ = resolve_global("questions")
-_QUESTIONS_DIR_WRITE = superv_home() / "questions"
+_QUESTIONS_DIR_WRITE = codehome_home() / "questions"
 
 
 @dataclass

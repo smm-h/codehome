@@ -17,7 +17,8 @@ import argparse
 import importlib
 import sys
 
-from codehome import cli_defaults, utils
+from codehome import utils
+from codehome.serve import DEFAULT_PORT
 
 
 def _register_plugin_commands(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> list[str]:
@@ -33,11 +34,10 @@ def _register_plugin_commands(sub: argparse._SubParsersAction[argparse.ArgumentP
 
     Returns the list of error strings from plugin loading and CLI registration.
     """
-    from codehome.paths import ROOT
     from codehome.plugins import registry
     from codehome.plugins.loader import load_all_plugins
 
-    _loaded, errors = load_all_plugins(ROOT)
+    _loaded, errors = load_all_plugins()
     # Errors are non-fatal; `v plugins list` will show them.
 
     # Snapshot core command names so we can reject plugin collisions.
@@ -68,92 +68,12 @@ def build_parser() -> argparse.ArgumentParser:
     from importlib.metadata import version
 
     parser = argparse.ArgumentParser(
-        prog="v",  # displayed as v (the recommended alias for codehome)
+        prog="v",  # displayed as v (the recommended alias for supervisor)
         description="Worktree manager for Veliu repos",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {version('codehome')}")
     parser.add_argument("--no-color", action="store_true", help="disable ANSI colors")
     sub = parser.add_subparsers(dest="command")
-
-    # -- branch lifecycle group -----------------------------------------------
-    from codehome.cli_helpers import add_branch_flag, add_dry_run_flag
-
-    p_branch = sub.add_parser("branch", help="branch lifecycle management")
-    p_branch.set_defaults(_cmd=("codehome.commands.branch", "_print_branch_help"))
-    branch_sub = p_branch.add_subparsers(dest="branch_command")
-
-    # v branch list (was: v ls)
-    p_bl = branch_sub.add_parser("list", help="list branches with full status")
-    p_bl.set_defaults(_cmd=("codehome.commands.branch", "cmd_ls"))
-    p_bl.add_argument("patterns", nargs="*", help="repo names or branch name patterns (wildcards supported)")
-    p_bl.add_argument("-S", "--selected", action="store_true", help="show selected branch only")
-    p_bl.add_argument("-M", "--markdown", action="store_true", help="full markdown output (default: bare names)")
-    p_bl.add_argument("-F", "--fetch", action="store_true", help="fetch before listing for accurate staleness")
-    p_bl.add_argument("-t", "--recent", action="store_true", help="sort by most recently created first")
-    p_bl.add_argument("-A", "--all", action="store_true", help="include archived branches")
-
-    # v branch alias (was: v alias)
-    p_ba = branch_sub.add_parser("alias", help="list or set branch aliases")
-    p_ba.set_defaults(_cmd=("codehome.commands.branch", "cmd_alias"))
-    p_ba.add_argument("name", nargs="?", help="alias name")
-    p_ba.add_argument("target", nargs="?", help="target branch (e.g. fix-auth or bag:fix-auth)")
-    p_ba.add_argument("--rm", action="store_true", help="remove an alias")
-
-    # v branch rename (was: v rename)
-    p_br = branch_sub.add_parser("rename", help="rename a worktree and its branch")
-    p_br.set_defaults(_cmd=("codehome.commands.branch", "cmd_rename"))
-    p_br.add_argument("old", help="current branch name")
-    p_br.add_argument("new", help="new branch name")
-
-    # v branch select (was: v switch)
-    p_bs = branch_sub.add_parser("select", help="activate a branch as the working selection")
-    p_bs.set_defaults(_cmd=("codehome.commands.switch", "cmd_switch"))
-    p_bs.add_argument("name", help="qualified name (repo:branch)")
-    p_bs.add_argument("--machine", action="store_true", help="machine-readable key=value output")
-
-    # v branch create (was: v new)
-    p_bc = branch_sub.add_parser("create", help="create a new branch + Linear issue")
-    p_bc.set_defaults(_cmd=("codehome.commands.new", "cmd_new"))
-    p_bc.add_argument("name", help="qualified name (repo:branch)")
-    p_bc.add_argument("description", help="issue description")
-    p_bc.add_argument("--no-issue", action="store_true", help="skip Linear issue creation")
-    p_bc.add_argument("--remote", action="store_true", help="adopt an existing remote branch")
-
-    # v branch finalize (was: v fin)
-    p_bf = branch_sub.add_parser("finalize", help="close branch: archive, remove worktree, update Linear")
-    p_bf.set_defaults(_cmd=("codehome.commands.fin", "cmd_fin"))
-    add_branch_flag(p_bf)
-    p_bf.add_argument("--cancel", action="store_true", help="abandon work (allow dirty, set Canceled)")
-    p_bf.add_argument("-m", "--message", help="closing note")
-    p_bf.add_argument("--force", action="store_true", help="override all guards")
-    p_bf.add_argument("--keep-worktree", action="store_true", help="archive metadata but leave worktree intact")
-
-    # v branch status (was: v status)
-    p_bst = branch_sub.add_parser("status", help="show all branches with Linear state and staleness")
-    p_bst.set_defaults(_cmd=("codehome.commands.status", "cmd_status"))
-
-    # -- unified check runner (v check) -----------------------------------------
-    p_check = sub.add_parser("check", help="run lint/typecheck/build checks by group")
-    p_check.set_defaults(_cmd=("codehome.commands.check_cmd", "cmd_check"), check_group=None)
-    p_check.add_argument(
-        "check_group",
-        nargs="?",
-        default=None,
-        help="group to run (e.g. precommit, gate) or 'install-hooks'",
-    )
-    p_check.add_argument(
-        "--force",
-        action="store_true",
-        help="overwrite existing hooks without prompting (install-hooks only)",
-    )
-
-    # TODO listing.
-    p = sub.add_parser("todo", help="list TODO files (branch, repo, or super level)")
-    p.set_defaults(_cmd=("codehome.commands.todo", "cmd_todo"))
-    p.add_argument("repo", nargs="?", default=None, help="repo name (e.g. bag) for repo-level TODOs")
-    p.add_argument("-B", "--branch", metavar="BRANCH", help="branch name (default: selected)")
-    p.add_argument("-S", "--super", action="store_true", help="show super-level TODOs instead of branch")
-    p.add_argument("-A", "--all", action="store_true", help="include .done, .defer, .obsolete subdirs")
 
     # -- plugins management group ----------------------------------------------
     p_plug = sub.add_parser("plugins", help="manage the plugin system")
@@ -174,69 +94,39 @@ def build_parser() -> argparse.ArgumentParser:
     p_plug_update.add_argument("name", nargs="?", default=None, help="plugin name to update")
     p_plug_update.add_argument("--all", dest="update_all", action="store_true", help="update all user-installed plugins")
 
-    # -- git operations group -------------------------------------------------
-    p_git = sub.add_parser("git", help="git operations (diff, push, rebase, ...)")
-    p_git.set_defaults(_cmd=("codehome.commands.git_cmd", "_print_git_help"))
-    git_sub = p_git.add_subparsers(dest="git_command")
+    # -- core commands ---------------------------------------------------------
 
-    # v git diff
-    p = git_sub.add_parser("diff", help="branch summary vs production (commits, files, diff)")
-    p.set_defaults(_cmd=("codehome.commands.git_cmd", "cmd_diff"))
-    add_branch_flag(p)
-    p.add_argument("-c", "--color", action="store_true", help="syntax-highlight diffs via delta")
-    p.add_argument("--tree", action="store_true", help="show files as indented tree instead of table")
-    p.add_argument("--full", action="store_true", help="bypass size gate and print full diff")
+    # superv home: show/create ~/.codehome/ skeleton.
+    p_home = sub.add_parser("home", help="show codehome home directory and create skeleton")
+    p_home.set_defaults(_cmd=("codehome.commands.home_cmd", "cmd_home"))
 
-    # v git commits
-    p = git_sub.add_parser("commits", help="list commits on branch vs production")
-    p.set_defaults(_cmd=("codehome.commands.git_cmd", "cmd_commits"))
-    add_branch_flag(p)
-    p.add_argument("-r", "--recent", action="store_true", help="sort newest first (default: chronological)")
+    # superv init: create a managed project under ~/.codehome/projects/.
+    p_init = sub.add_parser("init", help="initialize a managed project under ~/.codehome/projects/")
+    p_init.set_defaults(_cmd=("codehome.commands.init_cmd", "cmd_init"))
+    p_init.add_argument("name", help="project name (used as directory name)")
+    p_init.add_argument("--remote", required=True, help="git remote URL to clone")
+    p_init.add_argument("--base", default="production", help="base branch name (default: production)")
 
-    # v git changes
-    p = git_sub.add_parser("changes", help="list changed files with stats (no inline diffs)")
-    p.set_defaults(_cmd=("codehome.commands.git_cmd", "cmd_changes"))
-    add_branch_flag(p)
-    p.add_argument("--tree", action="store_true", help="show files as indented tree instead of table")
+    # superv migrate: copy state from .supervisor/ to ~/.codehome/.
+    p_migrate = sub.add_parser("migrate", help="migrate state from .supervisor/ to ~/.codehome/")
+    p_migrate.set_defaults(_cmd=("codehome.commands.migrate_cmd", "cmd_migrate"))
 
-    # v git compare
-    p = git_sub.add_parser("compare", help="compare two branches (diffstat + patch)")
-    p.set_defaults(_cmd=("codehome.commands.git_cmd", "cmd_compare"))
-    p.add_argument("branch_a", help="first qualified branch name (repo:branch)")
-    p.add_argument("branch_b", help="second qualified branch name (repo:branch)")
-    p.add_argument("-c", "--color", action="store_true", help="syntax-highlight diffs via delta")
+    # -- auth group ------------------------------------------------------------
+    p_auth = sub.add_parser("auth", help="authentication and server setup")
+    auth_sub = p_auth.add_subparsers(dest="auth_command")
 
-    # v git explain
-    p = git_sub.add_parser("explain", help="AI-explain branch changes (calls claude -p)")
-    p.set_defaults(_cmd=("codehome.commands.git_cmd", "cmd_explain"))
-    add_branch_flag(p)
-    p.add_argument("--full", action="store_true", help="bypass size gate and print full diff")
+    p_al = auth_sub.add_parser("login", help="authenticate with the dev server")
+    p_al.set_defaults(_cmd=("codehome.commands.login", "cmd_login"))
+    p_al.add_argument("--browser", action="store_true", help="open login page in browser")
+    p_al.add_argument("--token", metavar="TOKEN", help="store a token directly (programmatic/browser flow)")
 
-    # v git history
-    p = git_sub.add_parser("history", help="show merge history for a branch on production")
-    p.set_defaults(_cmd=("codehome.commands.history", "cmd_history"))
-    add_branch_flag(p, required=True)
+    p_alo = auth_sub.add_parser("logout", help="remove stored authentication token")
+    p_alo.set_defaults(_cmd=("codehome.commands.login", "cmd_logout"))
 
-    # v git push
-    p = git_sub.add_parser("push", help="push branch to remote with --force-with-lease")
-    p.set_defaults(_cmd=("codehome.commands.git_cmd", "cmd_push"))
-    add_dry_run_flag(p)
-    p.add_argument("--skip-native-check", action="store_true", help="push even if native changes lack a binary build")
-    add_branch_flag(p, visible=False)
+    p_as = auth_sub.add_parser("setup", help="one-time server bootstrap wizard")
+    p_as.set_defaults(_cmd=("codehome.commands.setup", "cmd_setup"))
 
-    # v git rebase
-    p = git_sub.add_parser("rebase", help="rebase onto latest production (auto-remigrates stale migrations)")
-    p.set_defaults(_cmd=("codehome.commands.git_cmd", "cmd_rebase"))
-    p.add_argument(
-        "subcommand", nargs="?", default=None, choices=["continue", "abort"], help="continue or abort a paused rebase"
-    )
-    add_dry_run_flag(p)
-    p.add_argument("--no-remigrate", action="store_true", help="block instead of auto-fixing stale migrations")
-    add_branch_flag(p, visible=False)
-
-    # Dev server lifecycle.
-    from codehome.serve import DEFAULT_PORT
-
+    # -- server lifecycle ------------------------------------------------------
     p_server = sub.add_parser("server", help="start the dev server")
     p_server.set_defaults(_cmd=("codehome.commands.server_cmd", "cmd_server"))
     p_server.add_argument("--port", type=int, default=DEFAULT_PORT, help=f"server port (default: {DEFAULT_PORT})")
@@ -244,157 +134,12 @@ def build_parser() -> argparse.ArgumentParser:
     p_server.add_argument("--stable", action="store_true", help="stable mode (default; kept for explicitness)")
     p_server.add_argument("--skip-rebuild", action="store_true", help="skip automatic frontend rebuild check")
     server_sub = p_server.add_subparsers(dest="server_command")
+
     p_stop = server_sub.add_parser("stop", help="stop the running server")
     p_stop.add_argument("--cleanup", action="store_true", help="stop all managed services before shutting down")
     server_sub.add_parser("status", help="show server status")
     server_sub.add_parser("restart", help="restart the server")
     server_sub.add_parser("check", help="run diagnostic checks on the running server")
-
-    # Per-branch service management (requires a running server for most commands).
-    p_services = sub.add_parser("services", help="manage per-branch services (supabase, vite, edge)")
-    p_services.set_defaults(_cmd=("codehome.commands.services_cmd", "cmd_services"))
-    services_sub = p_services.add_subparsers(dest="services_command")
-
-    p_svc_list = services_sub.add_parser("list", help="list services (all if no branch, filtered with -B)")
-    add_branch_flag(p_svc_list)
-    p_svc_list.add_argument(
-        "--all-branches", action="store_true", help="show services across ALL branches (default when no -B given)"
-    )
-    p_svc_list.add_argument(
-        "--group", action="store_true", help="group output by branch with a summary line per branch"
-    )
-
-    def _add_poll_flags(parser: argparse.ArgumentParser) -> None:
-        """Add required --poll / --no-poll mutually exclusive group."""
-        poll_group = parser.add_mutually_exclusive_group(required=True)
-        poll_group.add_argument(
-            "--poll",
-            dest="poll",
-            action="store_true",
-            default=None,
-            help="wait for operation to complete, polling every 2s",
-        )
-        poll_group.add_argument(
-            "--no-poll",
-            dest="poll",
-            action="store_false",
-            help="return immediately after the server accepts the request",
-        )
-
-    p_svc_restart = services_sub.add_parser("restart", help="restart a service for the branch")
-    p_svc_restart.add_argument(
-        "target",
-        nargs="?",
-        default=None,
-        help="service suffix (e.g. functions, vite-bag)",
-    )
-    p_svc_restart.add_argument(
-        "--all-services",
-        action="store_true",
-        help="restart all services in dependency order (stop reverse, then start forward)",
-    )
-    _add_poll_flags(p_svc_restart)
-    add_branch_flag(p_svc_restart)
-
-    p_svc_start = services_sub.add_parser("start", help="start a registered service (or all with --all-services)")
-    p_svc_start.add_argument("target", nargs="?", default=None, help="service suffix (e.g. functions, vite-bag)")
-    p_svc_start.add_argument(
-        "--all-services", action="store_true", help="start all services for the branch in dependency order"
-    )
-    _add_poll_flags(p_svc_start)
-    add_branch_flag(p_svc_start)
-
-    p_svc_stop = services_sub.add_parser("stop", help="stop a running service (or all with --all-services)")
-    p_svc_stop.add_argument("target", nargs="?", default=None, help="service suffix (e.g. functions, vite-bag)")
-    p_svc_stop.add_argument(
-        "--all-services", action="store_true", help="stop all services for the branch in reverse dependency order"
-    )
-    p_svc_stop.add_argument(
-        "--all-branches", action="store_true", help="stop services across ALL branches (requires --all-services)"
-    )
-    p_svc_stop.add_argument("--force", action="store_true", help="force stop even if not cleanly running")
-    _add_poll_flags(p_svc_stop)
-    add_branch_flag(p_svc_stop)
-
-    p_svc_setup = services_sub.add_parser("setup", help="register and set up all template services for a branch")
-    add_branch_flag(p_svc_setup)
-
-    p_svc_delvol = services_sub.add_parser(
-        "delete-volumes", help="remove Docker volumes (all services must be stopped first)"
-    )
-    add_branch_flag(p_svc_delvol)
-    p_svc_delvol.add_argument("--all-branches", action="store_true", help="delete volumes across ALL branches")
-
-    p_svc_status = services_sub.add_parser("status", help="show detailed status for a single service")
-    p_svc_status.add_argument("target", help="service suffix (e.g. functions, vite-bag)")
-    add_branch_flag(p_svc_status)
-
-    p_svc_logs = services_sub.add_parser("logs", help="show docker logs for a service")
-    p_svc_logs.add_argument("target", help="service suffix (e.g. functions, vite-bag)")
-    p_svc_logs.add_argument(
-        "--tail", type=int, default=cli_defaults.get("logs.tail"), help="number of lines (default: 100)"
-    )
-    p_svc_logs.add_argument("-f", "--follow", action="store_true", help="follow log output")
-    add_branch_flag(p_svc_logs)
-
-    p_svc_migrate = services_sub.add_parser("migrate", help="re-run Supabase migrations")
-    p_svc_migrate.add_argument("target", help="service suffix (e.g. supabase)")
-    add_branch_flag(p_svc_migrate)
-
-    p_svc_deps = services_sub.add_parser("deps", help="check or reinstall node_modules for a service")
-    p_svc_deps.add_argument("target", help="service suffix (e.g. vite-bag)")
-    p_svc_deps.add_argument(
-        "--reinstall",
-        action="store_true",
-        help="force reinstall deps (stop, remove volume, recreate)",
-    )
-    add_branch_flag(p_svc_deps)
-
-    p_svc_orphans = services_sub.add_parser("orphans", help="find Docker containers not tracked by the dashboard")
-    p_svc_orphans.add_argument("--stop", action="store_true", help="stop all orphaned containers")
-
-    # superv home: show/create ~/.superv/ skeleton.
-    p_home = sub.add_parser("home", help="show superv home directory and create skeleton")
-    p_home.set_defaults(_cmd=("codehome.commands.home_cmd", "cmd_home"))
-
-    # superv init: create a managed project under ~/.superv/projects/.
-    p_init = sub.add_parser("init", help="initialize a managed project under ~/.superv/projects/")
-    p_init.set_defaults(_cmd=("codehome.commands.init_cmd", "cmd_init"))
-    p_init.add_argument("name", help="project name (used as directory name)")
-    p_init.add_argument("--remote", required=True, help="git remote URL to clone")
-    p_init.add_argument("--base", default="production", help="base branch name (default: production)")
-
-    # superv migrate: copy state from .supervisor/ to ~/.superv/.
-    p_migrate = sub.add_parser("migrate", help="migrate state from .supervisor/ to ~/.superv/")
-    p_migrate.set_defaults(_cmd=("codehome.commands.migrate_cmd", "cmd_migrate"))
-
-    # Repo listing.
-    p = sub.add_parser("repos", help="list configured repositories")
-    p.set_defaults(_cmd=("codehome.commands.repos", "cmd_repos"))
-
-    # -- authentication and server setup group ----------------------------------
-    p_auth = sub.add_parser("auth", help="authentication and server setup")
-    auth_sub = p_auth.add_subparsers(dest="auth_command")
-    # v auth login (was: v login)
-    p_al = auth_sub.add_parser("login", help="authenticate with the dev server")
-    p_al.set_defaults(_cmd=("codehome.commands.login", "cmd_login"))
-    p_al.add_argument("--browser", action="store_true", help="open login page in browser")
-    p_al.add_argument("--token", metavar="TOKEN", help="store a token directly (programmatic/browser flow)")
-    # v auth logout (was: v logout)
-    p_alo = auth_sub.add_parser("logout", help="remove stored authentication token")
-    p_alo.set_defaults(_cmd=("codehome.commands.login", "cmd_logout"))
-    # v auth setup (was: v setup)
-    p_as = auth_sub.add_parser("setup", help="one-time server bootstrap wizard")
-    p_as.set_defaults(_cmd=("codehome.commands.setup", "cmd_setup"))
-
-    # -- documentation tools group ---------------------------------------------
-    p_docs = sub.add_parser("docs", help="documentation tools")
-    p_docs.set_defaults(_cmd=("codehome.commands.gendocs", "_print_docs_help"))
-    docs_sub = p_docs.add_subparsers(dest="docs_command")
-
-    # v docs regenerate (was: v gendocs)
-    p_docs_regen = docs_sub.add_parser("regenerate", help="generate docs/cli.md from the argparse parser")
-    p_docs_regen.set_defaults(_cmd=("codehome.commands.gendocs", "cmd_gendocs"))
 
     # -- dynamically registered plugin commands --------------------------------
     plugin_errors = _register_plugin_commands(sub)
@@ -411,48 +156,10 @@ def _load_commands() -> dict[str, object]:
     """
     table = {}
     _imports = [
-        (
-            "codehome.commands.branch",
-            {
-                "branch": "_print_branch_help",
-                "branch.list": "cmd_ls",
-                "branch.alias": "cmd_alias",
-                "branch.rename": "cmd_rename",
-            },
-        ),
-        ("codehome.commands.switch", {"branch.select": "cmd_switch"}),
-        ("codehome.commands.new", {"branch.create": "cmd_new"}),
-        ("codehome.commands.fin", {"branch.finalize": "cmd_fin"}),
-        ("codehome.commands.status", {"branch.status": "cmd_status"}),
-        ("codehome.commands.check_cmd", {"check": "cmd_check"}),
-        ("codehome.commands.plugins_cmd", {"plugins": "cmd_plugins"}),
-        (
-            "codehome.commands.git_cmd",
-            {
-                "git": "_print_git_help",
-                "git.diff": "cmd_diff",
-                "git.changes": "cmd_changes",
-                "git.commits": "cmd_commits",
-                "git.compare": "cmd_compare",
-                "git.explain": "cmd_explain",
-                "git.rebase": "cmd_rebase",
-                "git.push": "cmd_push",
-            },
-        ),
-        ("codehome.commands.history", {"git.history": "cmd_history"}),
         ("codehome.commands.home_cmd", {"home": "cmd_home"}),
         ("codehome.commands.init_cmd", {"init": "cmd_init"}),
         ("codehome.commands.migrate_cmd", {"migrate": "cmd_migrate"}),
-        ("codehome.commands.repos", {"repos": "cmd_repos"}),
-        ("codehome.commands.gendocs", {"docs": "_print_docs_help", "docs.regenerate": "cmd_gendocs"}),
-        ("codehome.commands.services_cmd", {"services": "cmd_services"}),
-        (
-            "codehome.commands.login",
-            {"auth.login": "cmd_login", "auth.logout": "cmd_logout"},
-        ),
-        ("codehome.commands.setup", {"auth.setup": "cmd_setup"}),
-        ("codehome.commands.server_cmd", {"server": "cmd_server"}),
-        ("codehome.commands.todo", {"todo": "cmd_todo"}),
+        ("codehome.commands.plugins_cmd", {"plugins": "cmd_plugins"}),
     ]
     for module_path, cmd_map in _imports:
         mod = importlib.import_module(module_path)

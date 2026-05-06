@@ -5,13 +5,13 @@ from __future__ import annotations
 import json
 import socket
 
-from codehome.paths import resolve_global, superv_home
+from codehome.paths import resolve_global, codehome_home
 from codehome.serve.file_lock import write_json_locked
 
-# Read: dual-path fallback (new ~/.superv/ then legacy .supervisor/).
-# Write: always to the canonical new location (~/.superv/).
+# Read: dual-path fallback (new ~/.codehome/ then legacy .supervisor/).
+# Write: always to the canonical new location (~/.codehome/).
 _STATE_FILE_READ = resolve_global("serve-ports.json")
-_STATE_FILE_WRITE = superv_home() / "serve-ports.json"
+_STATE_FILE_WRITE = codehome_home() / "serve-ports.json"
 
 # Preferred default ports per service type (last segment of the key).
 _DEFAULTS = {

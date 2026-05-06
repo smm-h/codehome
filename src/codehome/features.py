@@ -1,18 +1,18 @@
 """Boolean feature flags with per-machine overrides via features.json.
 
-Reads from ~/.superv/features.json (preferred) or .supervisor/features.json (fallback).
-Writes always go to ~/.superv/features.json.
+Reads from ~/.codehome/features.json (preferred) or .supervisor/features.json (fallback).
+Writes always go to ~/.codehome/features.json.
 """
 
 import json
 import threading
 
-from codehome.paths import resolve_global, superv_home
+from codehome.paths import resolve_global, codehome_home
 
-# Dual-read: resolve_global checks ~/.superv/ first, falls back to .supervisor/.
+# Dual-read: resolve_global checks ~/.codehome/ first, falls back to .supervisor/.
 FEATURES_FILE = resolve_global("features.json")
 # Writes always target the new canonical location.
-_FEATURES_WRITE = superv_home() / "features.json"
+_FEATURES_WRITE = codehome_home() / "features.json"
 
 DEFAULTS: dict[str, bool] = {
     "conductor": True,
@@ -70,6 +70,6 @@ def reload() -> None:
 
 
 def _write_overrides(data: dict[str, bool]) -> None:
-    """Write override flags to ~/.superv/features.json."""
+    """Write override flags to ~/.codehome/features.json."""
     _FEATURES_WRITE.parent.mkdir(parents=True, exist_ok=True)
     _FEATURES_WRITE.write_text(json.dumps(data, indent=2) + "\n")

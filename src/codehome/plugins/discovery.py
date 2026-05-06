@@ -1,17 +1,21 @@
 """Plugin discovery: scan plugin directories for plugin manifests.
 
-Scans two locations for subdirectories containing a ``plugin.toml``
-manifest file:
+Scans configured directories for subdirectories containing a
+``plugin.toml`` manifest file.  Plugin paths come from:
 
-1. ``plugins/`` at the project root (project-level plugins)
-2. ``~/.superv/plugins/`` (user-level plugins installed via
+1. ``[plugins] paths`` in ``~/.codehome/config.toml`` (config-based)
+2. ``~/.codehome/plugins/`` (user-level plugins installed via
    ``v plugins install``)
 
+If no ``config.toml`` exists or ``[plugins] paths`` is unset, falls
+back to scanning ``ROOT / "plugins"`` for backward compatibility.
+
 Each valid manifest is parsed via
-:func:`codehome.plugins.manifest.parse_manifest` and collected into
+:func:`supervisor.plugins.manifest.parse_manifest` and collected into
 a :class:`DiscoveryResult`.  Directories starting with ``_`` or ``.``
-are skipped.  If both locations contain a plugin with the same name,
-the project-level one wins (user-level is skipped with a warning).
+are skipped.  If multiple locations contain a plugin with the same
+name, the first-listed path wins (later duplicates are skipped with
+a warning).
 
 This mirrors the pattern in :mod:`codehome.extensions.discovery` but
 is simpler: no file-based import is needed, just manifest parsing.
@@ -20,13 +24,11 @@ is simpler: no file-based import is needed, just manifest parsing.
 from __future__ import annotations
 
 import shutil
+import tomllib
 from dataclasses import dataclass, field
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 from codehome.plugins.manifest import PluginManifest, parse_manifest
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 
 @dataclass
@@ -73,48 +75,96 @@ def _scan_plugins_dir(plugins_dir: Path, result: DiscoveryResult) -> None:
         result.plugins.append((entry, manifest))
 
 
-def discover_plugins(root: Path) -> DiscoveryResult:
+def _read_plugin_paths_from_config() -> list[Path] | None:
+    """Read [plugins] paths from ~/.codehome/config.toml.
+
+    Returns None if the config file doesn't exist or doesn't have the key,
+    signaling the caller should use the fallback behavior.
+    """
+    from codehome.paths import codehome_home
+
+    config_file = codehome_home() / "config.toml"
+    if not config_file.is_file():
+        return None
+
+    try:
+        data = tomllib.loads(config_file.read_text())
+    except (tomllib.TOMLDecodeError, OSError):
+        return None
+
+    raw_paths = data.get("plugins", {}).get("paths")
+    if raw_paths is None:
+        return None
+
+    # Expand ~ in each path entry.
+    return [Path(p).expanduser() for p in raw_paths]
+
+
+def discover_plugins(root: Path | None = None) -> DiscoveryResult:
     """Scan plugin directories for subdirectories with ``plugin.toml``.
 
-    Scans two locations:
-    1. ``root / "plugins"``     -- project-level plugins
-    2. ``~/.superv/plugins/``   -- user-level installed plugins
+    Plugin directories are determined by (in priority order):
 
-    Project-level plugins take priority: if both locations declare
-    a plugin with the same name, only the project-level one is kept.
+    1. If *root* is passed explicitly (e.g. from tests), scan
+       ``root / "plugins"`` only.
+    2. Otherwise, read ``[plugins] paths`` from
+       ``~/.codehome/config.toml``.
+    3. If neither is available, fall back to ``ROOT / "plugins"``
+       (backward compat for editable installs without config).
+
+    In all cases, ``~/.codehome/plugins/`` is also scanned for
+    user-installed plugins.  Earlier directories take priority: if
+    multiple locations declare a plugin with the same name, only
+    the first-seen one is kept.
 
     Args:
-        root: Absolute path to the super/ project root.
+        root: Optional project root override (used by tests).
+            When None, plugin paths come from config or ROOT fallback.
 
     Returns:
         DiscoveryResult with parsed manifests and any errors.
 
     """
-    from codehome.paths import superv_home
+    from codehome.paths import codehome_home
 
     result = DiscoveryResult()
 
-    # 1. Scan project-level plugins/ directory.
-    _scan_plugins_dir(root / "plugins", result)
+    # Determine which directories to scan for plugins.
+    if root is not None:
+        # Explicit root provided (tests, backward compat callers).
+        scan_dirs = [root / "plugins"]
+    else:
+        config_paths = _read_plugin_paths_from_config()
+        if config_paths is not None:
+            scan_dirs = config_paths
+        else:
+            # Fallback: use ROOT / "plugins" (old behavior).
+            from codehome.paths import ROOT
+            scan_dirs = [ROOT / "plugins"]
 
-    # Track names found at project level so user-level duplicates are skipped.
-    project_names = {m.name for _, m in result.plugins}
+    # 1. Scan configured plugin directories.
+    for plugins_dir in scan_dirs:
+        _scan_plugins_dir(plugins_dir, result)
 
-    # 2. Scan user-level ~/.superv/plugins/ directory.
-    user_plugins_dir = superv_home() / "plugins"
+    # Track names found so far so user-level duplicates are skipped.
+    seen_names = {m.name for _, m in result.plugins}
+
+    # 2. Scan user-level ~/.codehome/plugins/ directory.
+    user_plugins_dir = codehome_home() / "plugins"
     if user_plugins_dir.is_dir():
         user_result = DiscoveryResult()
         _scan_plugins_dir(user_plugins_dir, user_result)
 
-        # Merge: skip user plugins that collide with project-level names.
+        # Merge: skip user plugins that collide with already-found names.
         for path, manifest in user_result.plugins:
-            if manifest.name in project_names:
+            if manifest.name in seen_names:
                 result.errors.append(
                     f"User plugin '{manifest.name}' at {path} skipped: "
-                    f"overridden by project-level plugin"
+                    f"overridden by higher-priority plugin"
                 )
             else:
                 result.plugins.append((path, manifest))
+                seen_names.add(manifest.name)
 
         result.errors.extend(user_result.errors)
 

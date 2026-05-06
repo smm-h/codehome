@@ -11,7 +11,7 @@ import logging
 from collections.abc import Callable
 from pathlib import Path
 
-from codehome.paths import resolve_global, superv_home
+from codehome.paths import resolve_global, codehome_home
 
 logger = logging.getLogger(__name__)
 
@@ -50,17 +50,17 @@ DEFAULT_PREFERENCES: dict[str, bool] = {
 class PushManager:
     """Manages VAPID keys, push subscriptions, and notification delivery."""
 
-    def __init__(self, supervisor_dir: Path | None = None) -> None:
+    def __init__(self, legacy_dir: Path | None = None) -> None:
         # When an explicit dir is passed (tests), use it for both reads
         # and writes.  Otherwise use resolve_global() for reads (dual-path
-        # fallback) and superv_home() for writes (new canonical location).
+        # fallback) and codehome_home() for writes (new canonical location).
         self._read_path: Callable[[str], Path]
-        if supervisor_dir:
-            self._read_path = lambda rel: supervisor_dir / rel
-            self._write_dir = supervisor_dir
+        if legacy_dir:
+            self._read_path = lambda rel: legacy_dir / rel
+            self._write_dir = legacy_dir
         else:
             self._read_path = resolve_global
-            self._write_dir = superv_home()
+            self._write_dir = codehome_home()
         self._vapid: dict[str, str] = {}
         # Subscription store: maps user_id to list of subscription info dicts.
         self._subscriptions: dict[str, list[dict[str, object]]] = {}
@@ -215,7 +215,7 @@ class PushManager:
                     subscription_info=sub,
                     data=payload,
                     vapid_private_key=self._private_key_pem,
-                    vapid_claims={"sub": "mailto:dev@codehome.local"},
+                    vapid_claims={"sub": "mailto:dev@supervisor.local"},
                 )
             except WebPushException as e:
                 # 410 Gone or 404 means the subscription is no longer valid.

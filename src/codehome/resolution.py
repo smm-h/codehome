@@ -55,7 +55,7 @@ def _infer_repo(branch: str) -> str:
 def _infer_from_cwd() -> str | None:
     """Try to infer repo:branch from the current working directory.
 
-    Walks up from CWD looking for superv/config.toml (the in-repo marker).
+    Walks up from CWD looking for codehome/config.toml (the in-repo marker).
     If found, reads the project name and determines the branch from git.
     Returns a qualified "repo:branch" string, or None if inference fails.
     """
@@ -64,9 +64,9 @@ def _infer_from_cwd() -> str | None:
     except OSError:
         return None
 
-    # Walk up looking for superv/config.toml
+    # Walk up looking for codehome/config.toml
     for parent in [cwd, *cwd.parents]:
-        marker = parent / "superv" / "config.toml"
+        marker = parent / "codehome" / "config.toml"
         if marker.is_file():
             try:
                 data = tomllib.loads(marker.read_text())
@@ -120,9 +120,9 @@ def resolve(explicit: str | None = None, allowed_repos: list[str] | None = None)
     if not qualified:
         qualified = _infer_from_cwd()
     if not qualified:
-        die("no branch selected\n  pass -B repo:branch, set VB=repo:branch, or cd into a worktree with superv/config.toml")
+        die("no branch selected\n  pass -B repo:branch, set VB=repo:branch, or cd into a worktree with codehome/config.toml")
 
-    from codehome.aliases import resolve_alias
+    from codehome.supervisor.aliases import resolve_alias
 
     repo, branch = parse_qualified(qualified)
     branch = resolve_alias(repo, branch)

@@ -10,7 +10,9 @@ module-level singletons directly.  Both paths reference the same instance
 because the lifespan stores the module-level instance on ``app.state``.
 """
 
-from typing import cast
+from __future__ import annotations
+
+from typing import TYPE_CHECKING, cast
 
 from fastapi import HTTPException, Request
 
@@ -21,11 +23,13 @@ from codehome.serve.metrics import MetricsCollector
 from codehome.serve.monitoring.health import HealthChecker
 from codehome.serve.monitoring.logs import LogAggregator
 from codehome.serve.ports import PortAllocator
-from codehome.serve.pty_manager import PTYManager
 from codehome.serve.push import PushManager
 from codehome.serve.questions import QuestionStore
 from codehome.serve.services import ServiceManager
 from codehome.serve.updater import UpdateChecker
+
+if TYPE_CHECKING:
+    from codehome.supervisor.ops.pty_manager import PTYManager
 
 # app.state attributes are always ``Any`` in Starlette's type stubs.
 # We use ``cast()`` to tell mypy the actual type stored by the lifespan.

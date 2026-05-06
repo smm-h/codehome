@@ -1,6 +1,6 @@
 """JSONL audit subscriber: writes audit=true events to daily log files.
 
-Drop-in replacement for the legacy ``codehome.events.emit()`` system.
+Drop-in replacement for the legacy ``supervisor.events.emit()`` system.
 Writes the same envelope format to the same directory so existing tooling
 (dashboards, scripts) keeps working unchanged.
 
@@ -17,7 +17,7 @@ import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from codehome.paths import superv_home
+from codehome.paths import codehome_home
 
 if TYPE_CHECKING:
     from codehome.bus.dispatch import EventBus
@@ -29,7 +29,7 @@ logger = logging.getLogger(__name__)
 
 def audit_subscriber(event: Event) -> None:
     """Append an audit event to today's JSONL file with fcntl locking."""
-    events_dir = superv_home() / "events"
+    events_dir = codehome_home() / "events"
     events_dir.mkdir(parents=True, exist_ok=True)
 
     payload = event.payload

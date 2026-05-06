@@ -9,26 +9,26 @@ import shutil
 from pathlib import Path
 
 
-def superv_home() -> Path:
-    """Return the global superv home directory (~/.superv/).
+def codehome_home() -> Path:
+    """Return the global codehome home directory (~/.codehome/).
 
-    Respects SUPERV_HOME env var for testing and custom layouts.
+    Respects CODEHOME_HOME env var for testing and custom layouts.
     Does NOT create the directory -- callers create on demand.
     """
-    env = os.environ.get("SUPERV_HOME")
+    env = os.environ.get("CODEHOME_HOME")
     if env:
         return Path(env).resolve()
-    return Path.home() / ".superv"
+    return Path.home() / ".codehome"
 
 
 def _compute_root() -> Path:
     """Compute the project root directory.
 
     Priority:
-    1. SUPERV_ROOT env var (explicit override)
+    1. CODEHOME_ROOT env var (explicit override)
     2. __file__-based computation (development/editable install mode)
     """
-    env_root = os.environ.get("SUPERV_ROOT")
+    env_root = os.environ.get("CODEHOME_ROOT")
     if env_root:
         p = Path(env_root).resolve()
         if p.is_dir():
@@ -52,19 +52,19 @@ IGNORABLE_FILE = ROOT / "scripts" / "ignorable-worktree-changes"
 
 
 def resolve_global(rel: str) -> Path:
-    """Resolve a global state file: prefer ~/.superv/, fall back to .supervisor/.
+    """Resolve a global state file: prefer ~/.codehome/, fall back to .supervisor/.
 
     This enables gradual migration from the legacy .supervisor/ layout
-    to the new ~/.superv/ home directory.
+    to the new ~/.codehome/ home directory.
     """
-    new = superv_home() / rel
+    new = codehome_home() / rel
     if new.exists():
         return new
     return SUPERVISOR_DIR / rel
 
 
 # Operational state files -- resolved via resolve_global() so they are
-# found in either ~/.superv/ (new layout) or .supervisor/ (legacy).
+# found in either ~/.codehome/ (new layout) or .supervisor/ (legacy).
 SUPPRESS_CHECKS = resolve_global("suppress-checks.txt")
 STAGING_MERGE_STATE = resolve_global("staging-merge.json")
 REBASE_STATE = resolve_global("rebase-state.json")
@@ -144,7 +144,7 @@ def repo_dir(repo: str) -> Path:
     """Top-level directory for a repo.
 
     For legacy repos (repos.toml): ROOT/repos/<repo>/
-    For new projects (projects.toml): ~/.superv/projects/<name>/
+    For new projects (projects.toml): ~/.codehome/projects/<name>/
     """
     # Lazy import to avoid circular dependency (paths -> config -> paths).
     from codehome.config import get_repo

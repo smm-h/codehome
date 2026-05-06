@@ -55,7 +55,7 @@ class LinearProvider:
         status from the Linear API using the per-user token. Returns
         enriched data or None if no issue is linked.
         """
-        from codehome.linear_shared import (
+        from codehome.linear.linear_shared import (
             _ISSUE_FIELDS,
             LinearAPIError,
             _normalize_issue,

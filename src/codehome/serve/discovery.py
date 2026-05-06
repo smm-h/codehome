@@ -75,6 +75,8 @@ async def discover_running() -> None:
     # Keyed by (branch, compose_service) for O(1) lookup.
     _template_by_compose_svc: dict[tuple[str, str], dict[str, object]] = {}
     for branch in branch_keys:
+        if ":" not in branch:
+            continue
         repo, br = branch.split(":", 1)
         raw = await asyncio.to_thread(load_services_config, repo, br)
         if raw is not None:
@@ -328,7 +330,7 @@ async def discover_docker() -> list[dict[str, object]]:
 
         matched = project_to_branch.get(project)
         if not matched:
-            # Container doesn't correspond to any known codehome branch
+            # Container doesn't correspond to any known supervisor branch
             # (e.g. Supabase CLI's own containers, unrelated dev containers).
             # Skip -- strict naming-convention match is the spec's guardrail
             # against false positives.
@@ -337,7 +339,7 @@ async def discover_docker() -> list[dict[str, object]]:
 
         # Find the service definition whose metadata.compose_service matches.
         # The container name format is `<project>-<compose_service>-<n>`;
-        # the codehome key is `<qualified>/<key_suffix>`.  The two are
+        # the supervisor key is `<qualified>/<key_suffix>`.  The two are
         # bridged through the template's metadata.compose_service field.
         resolved_services = await asyncio.to_thread(
             _resolved_services_for,

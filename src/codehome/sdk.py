@@ -12,6 +12,10 @@ and FastAPI auth dependencies.
 from __future__ import annotations
 
 import types
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # -- CLI defaults (module re-export: plugins use `cli_defaults.get(key)`) --
 from codehome import cli_defaults
@@ -59,7 +63,7 @@ from codehome.paths import (
     repo_dir,
     resolve_global,
     staging_worktree,
-    superv_home,
+    codehome_home,
     tests_file,
     worktree_path,
 )
@@ -142,6 +146,24 @@ def load_sibling(name: str, caller_file: str, *, cache: bool = False) -> types.M
     return mod
 
 
+def get_plugin_cache_dir(plugin_name: str, key: str) -> Path:
+    """Return the cache directory for a plugin, creating it if needed.
+
+    Checks the new location (~/.codehome/<plugin>/<key>) first,
+    falls back to the legacy location (.supervisor/<plugin>/<key>).
+    If neither exists, returns the new location.
+    """
+    from pathlib import Path as _Path
+
+    new = codehome_home() / plugin_name / key
+    if new.exists():
+        return new
+    legacy = SUPERVISOR_DIR / plugin_name / key
+    if legacy.exists():
+        return legacy
+    return new
+
+
 __all__ = [
     "PROTECTED_BRANCHES",
     "REPOS_DIR",
@@ -182,6 +204,7 @@ __all__ = [
     "fire_sync",
     "get_current_user",
     "get_gh_token",
+    "get_plugin_cache_dir",
     "get_process_id",
     "get_repo",
     "gh_api",
@@ -217,7 +240,7 @@ __all__ = [
     "server_url",
     "services",
     "staging_worktree",
-    "superv_home",
+    "codehome_home",
     "tests_file",
     "warn",
     "worktree_path",

@@ -10,7 +10,7 @@ from typing import Any
 from fastapi import Depends, FastAPI
 
 from codehome.config import load_server_config
-from codehome.paths import superv_home
+from codehome.paths import codehome_home
 from codehome.serve.agent_sessions import agent_sessions
 from codehome.serve.auth_deps import get_current_user
 from codehome.serve.discovery import discover_docker, discover_running
@@ -20,7 +20,6 @@ from codehome.serve.metrics import metrics_collector
 from codehome.serve.monitoring.health import health_checker
 from codehome.serve.monitoring.logs import log_aggregator
 from codehome.serve.ports import ports
-from codehome.serve.pty_manager import pty_manager
 from codehome.serve.push import push_manager
 from codehome.serve.questions import question_store
 from codehome.serve.services import services
@@ -85,6 +84,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     if features.enabled("monitoring"):
         app.state.metrics_collector = metrics_collector
     if features.enabled("terminal"):
+        from codehome.supervisor.ops.pty_manager import pty_manager
+
         app.state.pty_manager = pty_manager
     if features.enabled("conductor"):
         app.state.agent_session_manager = agent_sessions
@@ -117,7 +118,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # SQLite-backed error log for frontend diagnostics and internal errors.
     from codehome.serve.error_log import ErrorLog
 
-    _superv = superv_home()
+    _superv = codehome_home()
     _superv.mkdir(parents=True, exist_ok=True)
     error_log = ErrorLog(_superv / "error_log.db")
     app.state.error_log = error_log
@@ -206,6 +207,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     update_checker.stop()
     fetch_scheduler.stop()
     if features.enabled("terminal"):
+        from codehome.supervisor.ops.pty_manager import pty_manager
+
         await pty_manager.cleanup_all()
     error_log.close()
 
@@ -251,10 +254,9 @@ async def ping() -> dict[str, bool]:
 
 
 # -- Load plugins (must happen before router mounting) ---------------------
-from codehome.paths import ROOT as _ROOT  # noqa: E402
 from codehome.plugins.loader import load_all_plugins as _load_plugins  # noqa: E402
 
-_load_plugins(_ROOT)
+_load_plugins()
 
 # -- Import and mount routers ---------------------------------------------
 
@@ -262,20 +264,8 @@ from codehome import features  # noqa: E402
 from codehome.serve.routers import (  # noqa: E402
     agents,
     auth,
-    branches,
     conductor,
-    connections,
-    database,
-    docs,
-    filesystem,
-    git,
-    matrix,
-    monitoring,
-    pipeline,
-    push,
     system,
-    terminal,
-    todo,
 )
 from codehome.serve.routers import (  # noqa: E402
     features as features_router,
@@ -291,25 +281,30 @@ app.include_router(features_router.router)
 
 # Feature-gated public routers: disable via .supervisor/features.json
 if features.enabled("terminal"):
-    app.include_router(terminal.public_router)
+    from codehome.supervisor.routes import public_router as _terminal_public_router  # noqa: E402
+
+    app.include_router(_terminal_public_router)
 if features.enabled("conductor"):
     app.include_router(agents.public_router)
+
+# Push public endpoint (VAPID key retrieval, no auth required).
 if features.enabled("push"):
-    app.include_router(push.public_router)
+    from fastapi import APIRouter as _APIRouter  # noqa: E402
+
+    _push_public = _APIRouter(prefix="/api/push", tags=["push"])
+
+    @_push_public.get("/vapid-key")
+    async def _get_vapid_key() -> object:
+        """Return the public VAPID key for push subscription registration."""
+        return {"public_key": push_manager.public_key}
+
+    app.include_router(_push_public)
 
 # Authenticated routers (all endpoints require valid JWT).
+# NOTE: branches, git, system (authed), and matrix routers moved to supervisor plugin.
 _authed_routers: list[Any] = [
     auth.router,
-    branches.router,
-    connections.router,
-    pipeline.router,
-    git.router,
     services_router.router,
-    filesystem.router,
-    todo.router,
-    docs.router,
-    system.router,
-    matrix.router,
     features_router.authed_router,
 ]
 
@@ -319,28 +314,27 @@ if features.enabled("plugins"):
 if features.enabled("conductor"):
     _authed_routers.append(conductor.router)
     _authed_routers.append(agents.router)
-if features.enabled("monitoring"):
-    _authed_routers.append(monitoring.router)
-if features.enabled("terminal"):
-    _authed_routers.append(terminal.router)
-if features.enabled("database"):
-    _authed_routers.append(database.router)
-if features.enabled("push"):
-    _authed_routers.append(push.router)
 for _r in _authed_routers:
     app.include_router(_r, dependencies=[Depends(get_current_user)])
 
 # -- Plugin-contributed routers (authenticated, gated on "plugins" flag) ----
-if features.enabled("plugins"):
-    from codehome.plugins import registry as _plugin_registry
+from codehome.plugins import registry as _plugin_registry  # noqa: E402
 
+if features.enabled("plugins"):
     for _plugin in _plugin_registry.list_plugins():
         if _plugin.router is not None:
-            app.include_router(
-                _plugin.router,
-                prefix=f"/api/p/{_plugin.name}",
-                dependencies=[Depends(get_current_user)],
-            )
+            if _plugin.manifest.root_routes:
+                # Mount at API root (endpoints define their own /api/ paths).
+                app.include_router(
+                    _plugin.router,
+                    dependencies=[Depends(get_current_user)],
+                )
+            else:
+                app.include_router(
+                    _plugin.router,
+                    prefix=f"/api/p/{_plugin.name}",
+                    dependencies=[Depends(get_current_user)],
+                )
 
 # -- SPA static file fallback / Vite dev proxy -----------------------------
 # In dev mode the Vite proxy middleware is added below (outermost ASGI layer).

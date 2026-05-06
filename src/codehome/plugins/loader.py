@@ -22,6 +22,7 @@ import asyncio
 import importlib.util
 import logging
 import sys
+import types
 from typing import TYPE_CHECKING, Any
 
 from codehome.dynamic_import import import_module_from_path
@@ -49,11 +50,65 @@ _installed_subscriptions: set[tuple[str, str, str]] = set()
 
 
 # ---------------------------------------------------------------------------
+# Namespace mounting
+# ---------------------------------------------------------------------------
+
+
+def _mount_plugin_namespaces(
+    ordered: list[tuple[Path, PluginManifest]],
+    state: dict[str, Any],
+) -> None:
+    """Register namespace plugins as codehome.* subpackages.
+
+    Must run before plugin module loading so cross-plugin imports resolve.
+    Only mounts enabled plugins.  Idempotent: skips if the package name
+    is already in sys.modules (handles second load_all_plugins() call).
+    """
+    import codehome
+
+    for plugin_dir, manifest in ordered:
+        if not manifest.namespace:
+            continue
+        if not state["plugins"].get(manifest.name, {}).get("enabled", False):
+            continue
+
+        ns_root = manifest.namespace_root or "."
+        mount_dir = plugin_dir / ns_root if ns_root != "." else plugin_dir
+        pkg_name = f"codehome.{manifest.namespace}"
+
+        if pkg_name in sys.modules:
+            # Already mounted (idempotent for second load_all_plugins call)
+            continue
+
+        init_path = mount_dir / "__init__.py"
+        if init_path.exists():
+            # Load the real __init__.py so re-exports work
+            spec = importlib.util.spec_from_file_location(
+                pkg_name,
+                init_path,
+                submodule_search_locations=[str(mount_dir)],
+            )
+            mod = importlib.util.module_from_spec(spec)
+            mod.__path__ = [str(mount_dir)]
+            sys.modules[pkg_name] = mod
+            spec.loader.exec_module(mod)
+        else:
+            # Create empty namespace package
+            mod = types.ModuleType(pkg_name)
+            mod.__path__ = [str(mount_dir)]
+            mod.__package__ = pkg_name
+            mod.__spec__ = None
+            sys.modules[pkg_name] = mod
+
+        setattr(codehome, manifest.namespace, mod)
+
+
+# ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
 
-def load_all_plugins(root: Path) -> tuple[int, list[str]]:
+def load_all_plugins(root: Path | None = None) -> tuple[int, list[str]]:
     """Discover, reconcile, sort, and load all enabled plugins.
 
     Called twice during normal operation:
@@ -73,7 +128,9 @@ def load_all_plugins(root: Path) -> tuple[int, list[str]]:
       singleton and should not be duplicated.
 
     Args:
-        root: Absolute path to the super/ project root.
+        root: Optional project root override. When None, plugin paths
+            are read from config (or ROOT fallback). Passed through to
+            discover_plugins() for backward compat / tests.
 
     Returns:
         A ``(loaded_count, errors)`` tuple where *loaded_count* is the
@@ -81,6 +138,11 @@ def load_all_plugins(root: Path) -> tuple[int, list[str]]:
         human-readable messages for anything that went wrong.
 
     """
+    from codehome.paths import ROOT
+
+    # State functions still need a root directory for persisting state.
+    state_root = root if root is not None else ROOT
+
     errors: list[str] = []
 
     # 1. Discover plugins on disk.
@@ -88,9 +150,9 @@ def load_all_plugins(root: Path) -> tuple[int, list[str]]:
     errors.extend(discovered.errors)
 
     # 2. Reconcile with persisted state.
-    old_state = load_state(root)
+    old_state = load_state(state_root)
     new_state = merge_discovered(old_state, discovered.plugins)
-    save_state(root, new_state)
+    save_state(state_root, new_state)
 
     # 3. Topological sort so dependencies load first.
     try:
@@ -99,7 +161,10 @@ def load_all_plugins(root: Path) -> tuple[int, list[str]]:
         errors.append(str(exc))
         return 0, errors
 
-    # 4. Clear the registry before a full reload.
+    # 4. Mount namespace plugins as codehome.* subpackages before loading.
+    _mount_plugin_namespaces(ordered, new_state)
+
+    # 5. Clear the registry before a full reload.
     registry.clear()
     _installed_subscriptions.clear()
 
@@ -139,7 +204,7 @@ def load_all_plugins(root: Path) -> tuple[int, list[str]]:
         if manifest.commands:
             handlers_path = plugin_dir / "handlers.py"
             if handlers_path.is_file():
-                mod = _import_module_from_file(name, handlers_path)
+                mod = _import_module_from_file(name, handlers_path, persist=True)
                 if mod is not None:
                     cli_registrar = getattr(mod, "register_cli", None)
                     if cli_registrar is None:
@@ -156,7 +221,7 @@ def load_all_plugins(root: Path) -> tuple[int, list[str]]:
         if manifest.dashboard is not None:
             routes_path = plugin_dir / "routes.py"
             if routes_path.is_file():
-                mod = _import_module_from_file(name, routes_path)
+                mod = _import_module_from_file(name, routes_path, persist=True)
                 if mod is not None:
                     router = getattr(mod, "router", None)
                     if router is None:
@@ -226,7 +291,7 @@ def load_all_plugins(root: Path) -> tuple[int, list[str]]:
 
         loaded += 1
 
-    # 5. Validate cross-plugin state reads against loaded plugins.
+    # 6. Validate cross-plugin state reads against loaded plugins.
     _validate_cross_plugin_reads(registry._plugins, errors)
 
     return loaded, errors
@@ -465,6 +530,8 @@ def _topological_sort(
 def _import_module_from_file(
     plugin_name: str,
     file_path: Path,
+    *,
+    persist: bool = False,
 ) -> ModuleType | None:
     """Import a Python file as a synthetic module.
 
@@ -474,6 +541,9 @@ def _import_module_from_file(
     Args:
         plugin_name: Plugin identifier, used to build the module name.
         file_path: Absolute path to the ``.py`` file.
+        persist: If True, keep the module in sys.modules after loading.
+            Used for handlers so tests can import them without re-triggering
+            the _sdk resolution.
 
     Returns:
         The imported module, or ``None`` if the import fails.
@@ -482,7 +552,11 @@ def _import_module_from_file(
     module_name = f"_plugin_{plugin_name}_{file_path.stem}"
 
     try:
-        return import_module_from_path(module_name, file_path)
+        mod = import_module_from_path(module_name, file_path)
     except Exception:
         log.exception("failed to import %s for plugin '%s'", file_path, plugin_name)
         return None
+
+    if mod is not None and persist:
+        sys.modules[module_name] = mod
+    return mod

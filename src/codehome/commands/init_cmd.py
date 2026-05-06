@@ -1,8 +1,8 @@
-"""superv init: create a managed project under ~/.superv/projects/.
+"""codehome init: create a managed project under ~/.codehome/projects/.
 
 Clones the repo as the anchor worktree, creates the project directory
 skeleton (branches/, state/, cache/, run/), and registers the project
-in ~/.superv/projects.toml.
+in ~/.codehome/projects.toml.
 """
 
 from __future__ import annotations
@@ -20,7 +20,7 @@ import tomli_w
 if TYPE_CHECKING:
     import argparse
 
-from codehome.paths import superv_home
+from codehome.paths import codehome_home
 from codehome.utils import die, green
 
 
@@ -48,7 +48,7 @@ def _save_projects_toml(path: Path, data: dict[str, Any]) -> None:
 
 
 def cmd_init(args: argparse.Namespace) -> None:
-    """Initialize a new managed project under ~/.superv/projects/.
+    """Initialize a new managed project under ~/.codehome/projects/.
 
     Creates the directory skeleton, clones the repo as the anchor
     worktree, and registers the project in projects.toml.
@@ -61,7 +61,7 @@ def cmd_init(args: argparse.Namespace) -> None:
     if not re.fullmatch(r"[a-zA-Z0-9_-]+", name):
         die(f"invalid project name '{name}': must match [a-zA-Z0-9_-]+")
 
-    home = superv_home()
+    home = codehome_home()
     project_dir = home / "projects" / name
 
     if project_dir.exists():
@@ -108,4 +108,4 @@ def cmd_init(args: argparse.Namespace) -> None:
     print(green(f"Project '{name}' initialized at {project_dir}"))
     print(f"  anchor: {worktree_dir}")
     print(f"  base branch: {base}")
-    print(f"\nNext: superv branch select {name}:{base}")
+    print(f"\nNext: codehome branch select {name}:{base}")

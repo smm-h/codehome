@@ -165,6 +165,13 @@ class PluginManifest:
     reads_state: tuple[str, ...] = ()
     services: tuple[ServiceDecl, ...] = ()
     subscriptions: tuple[SubscriptionDecl, ...] = ()
+    # Namespace mounting: if set, the plugin is importable as codehome.<namespace>.
+    # namespace_root selects a subdirectory within the plugin to mount (default: plugin root).
+    namespace: str = ""
+    namespace_root: str = ""
+    # If True, mount routes at API root (endpoints define their own /api/ paths)
+    # instead of the default /api/p/<name>/ prefix.
+    root_routes: bool = False
     # Structured dependency sections from [deps] and [system] TOML tables.
     # python_deps remains as a convenience alias (maps to deps_required).
     deps_required: tuple[str, ...] = ()
@@ -352,6 +359,13 @@ def parse_manifest(plugin_dir: Path) -> PluginManifest:
     services = _parse_services(data.get("services", []), path)
     subscriptions = _parse_subscriptions(data.get("subscriptions", []), path)
 
+    # Namespace mounting fields.
+    namespace = data.get("namespace", "")
+    namespace_root = data.get("namespace_root", "")
+
+    # Root routes: mount at API root instead of /api/p/<name>/.
+    root_routes = bool(data.get("root_routes", False))
+
     # Structured [deps] and [system] sections (nested TOML tables).
     deps_section = data.get("deps", {})
     deps_required = tuple(deps_section.get("required", ()))
@@ -375,6 +389,9 @@ def parse_manifest(plugin_dir: Path) -> PluginManifest:
         reads_state=reads_state,
         services=services,
         subscriptions=subscriptions,
+        namespace=namespace,
+        namespace_root=namespace_root,
+        root_routes=root_routes,
         deps_required=deps_required,
         deps_optional=deps_optional,
         system_required=system_required,

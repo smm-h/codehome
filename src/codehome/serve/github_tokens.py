@@ -4,7 +4,7 @@ Tokens are encrypted at rest using Fernet (AES-128-CBC + HMAC-SHA256).
 The encryption key is derived from the server's JWT secret via PBKDF2
 so no additional secret management is needed.
 
-Storage: ~/.superv/github-tokens.json  (encrypted values only).
+Storage: ~/.codehome/github-tokens.json  (encrypted values only).
 Falls back to .supervisor/github-tokens.json for legacy installs.
 """
 
@@ -17,10 +17,10 @@ from cryptography.fernet import Fernet, InvalidToken
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 
-from codehome.paths import SUPERVISOR_DIR, superv_home
+from codehome.paths import SUPERVISOR_DIR, codehome_home
 
 # New location for encrypted GitHub tokens; legacy fallback below.
-_TOKENS_FILE = superv_home() / "github-tokens.json"
+_TOKENS_FILE = codehome_home() / "github-tokens.json"
 _LEGACY_TOKENS_FILE = SUPERVISOR_DIR / "github-tokens.json"
 
 # Guards read-modify-write on the tokens file.

@@ -1,7 +1,7 @@
-"""Migrate state from .supervisor/ to ~/.superv/.
+"""Migrate state from .supervisor/ to ~/.codehome/.
 
 Copies critical configuration files from the legacy project-local
-.supervisor/ directory to the new user-global ~/.superv/ home.
+.supervisor/ directory to the new user-global ~/.codehome/ home.
 Also migrates the legacy ~/.supervisor/token file.
 
 Safe to run multiple times -- existing files at the destination are
@@ -12,15 +12,15 @@ import argparse
 import shutil
 from pathlib import Path
 
-from codehome.paths import SUPERVISOR_DIR, superv_home
+from codehome.paths import SUPERVISOR_DIR, codehome_home
 
 
 def cmd_migrate(args: argparse.Namespace) -> None:
-    """Copy state files from .supervisor/ to ~/.superv/."""
-    home = superv_home()
+    """Copy state files from .supervisor/ to ~/.codehome/."""
+    home = codehome_home()
     home.mkdir(parents=True, exist_ok=True)
 
-    # Items to migrate from project-local .supervisor/ to ~/.superv/.
+    # Items to migrate from project-local .supervisor/ to ~/.codehome/.
     items: list[tuple[str, str, bool]] = [
         # (source_rel_to_SUPERVISOR_DIR, dest_rel_to_home, is_directory)
         # Core config
@@ -61,7 +61,7 @@ def cmd_migrate(args: argparse.Namespace) -> None:
             continue
 
         if dst.exists():
-            print(f"  skip  {dst_rel}  (already exists in ~/.superv/)")
+            print(f"  skip  {dst_rel}  (already exists in ~/.codehome/)")
             skipped += 1
             continue
 
@@ -70,21 +70,21 @@ def cmd_migrate(args: argparse.Namespace) -> None:
         else:
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, dst)
-        print(f"  copy  {src_rel}  ->  ~/.superv/{dst_rel}")
+        print(f"  copy  {src_rel}  ->  ~/.codehome/{dst_rel}")
         copied += 1
 
-    # Migrate legacy ~/.supervisor/token -> ~/.superv/token.
+    # Migrate legacy ~/.supervisor/token -> ~/.codehome/token.
     old_token = Path.home() / ".supervisor" / "token"
     new_token = home / "token"
     if not old_token.exists():
         print("  skip  token  (not found in ~/.supervisor/)")
         missing += 1
     elif new_token.exists():
-        print("  skip  token  (already exists in ~/.superv/)")
+        print("  skip  token  (already exists in ~/.codehome/)")
         skipped += 1
     else:
         shutil.copy2(old_token, new_token)
-        print("  copy  ~/.supervisor/token  ->  ~/.superv/token")
+        print("  copy  ~/.supervisor/token  ->  ~/.codehome/token")
         copied += 1
 
     print()

@@ -6,7 +6,7 @@ not in metadata files.
 
 Repos come from two sources:
   - ROOT/.supervisor/repos.toml (legacy, paths under ROOT/repos/)
-  - ~/.superv/projects.toml (new, paths under ~/.superv/projects/<name>/)
+  - ~/.codehome/projects.toml (new, paths under ~/.codehome/projects/<name>/)
 
 Both are merged by load_repos(). The project_dir field on RepoConfig
 distinguishes them: None = legacy layout, set = new layout.
@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from codehome.paths import ROOT, SUPERVISOR_DIR, resolve_global, superv_home
+from codehome.paths import ROOT, SUPERVISOR_DIR, resolve_global, codehome_home
 
 REPOS_FILE = ROOT / ".supervisor" / "repos.toml"
 SERVER_CONFIG_FILE = resolve_global("config.json")
@@ -81,7 +81,7 @@ class RepoConfig:
     demo_branch: str | None = None
     default_linear_team: str | None = None
     # When set, paths derive from this directory instead of ROOT/repos/<name>.
-    # Set for projects loaded from ~/.superv/projects.toml.
+    # Set for projects loaded from ~/.codehome/projects.toml.
     project_dir: Path | None = None
 
 
@@ -96,18 +96,18 @@ def _load_toml(path: Path) -> dict[str, Any]:
 
 
 def load_repos() -> dict[str, RepoConfig]:
-    """Load all repo configs from repos.toml AND ~/.superv/projects.toml.
+    """Load all repo configs from repos.toml AND ~/.codehome/projects.toml.
 
     Legacy repos (repos.toml) have project_dir=None; paths derive from
     ROOT/repos/<name>/.  New projects (projects.toml) have project_dir
-    set to ~/.superv/projects/<name>/.
+    set to ~/.codehome/projects/<name>/.
 
     On name collision, legacy repos.toml wins (it's the local install).
     """
     repos: dict[str, RepoConfig] = {}
 
-    # --- New projects from ~/.superv/projects.toml ---
-    home = superv_home()
+    # --- New projects from ~/.codehome/projects.toml ---
+    home = codehome_home()
     projects_file = home / "projects.toml"
     for name, data in _load_toml(projects_file).items():
         remote = data.get("remote", "")

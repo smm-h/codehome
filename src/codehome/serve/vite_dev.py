@@ -21,7 +21,27 @@ import httpx
 logger = logging.getLogger("codehome.serve.vite_dev")
 
 # Directory containing the dashboard source (vite.config.ts lives here).
-DASHBOARD_DIR = Path(__file__).resolve().parent.parent.parent.parent / "dashboard"
+# Discovered from the dashboard plugin if loaded; falls back to the legacy
+# relative path from the server module.
+def _find_dashboard_dir() -> Path:
+    """Discover the dashboard frontend source directory.
+
+    Looks two levels up from the dashboard plugin dir (plugins/dashboard/
+    -> project root -> dashboard/). Falls back to the legacy four-level
+    traversal from this file's location.
+    """
+    from codehome.plugins import registry as plugin_registry
+
+    plugin = plugin_registry.get("dashboard")
+    if plugin is not None:
+        # Plugin lives at <root>/plugins/dashboard/; frontend at <root>/dashboard/
+        candidate = Path(plugin.plugin_dir).parent.parent / "dashboard"
+        if candidate.is_dir():
+            return candidate
+    return Path(__file__).resolve().parent.parent.parent.parent / "dashboard"
+
+
+DASHBOARD_DIR = _find_dashboard_dir()
 
 
 def _find_free_port() -> int:

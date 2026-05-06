@@ -9,11 +9,11 @@ from datetime import UTC, datetime
 
 import bcrypt
 
-from codehome.paths import SUPERVISOR_DIR, superv_home
+from codehome.paths import SUPERVISOR_DIR, codehome_home
 from codehome.utils import die
 
-# Writes go to ~/.superv/ (new canonical location).
-_HOME = superv_home()
+# Writes go to ~/.codehome/ (new canonical location).
+_HOME = codehome_home()
 CONFIG_FILE = _HOME / "config.json"
 USERS_FILE = _HOME / "users.json"
 

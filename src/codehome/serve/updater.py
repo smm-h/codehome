@@ -11,7 +11,7 @@ from codehome.serve.logging_config import get_logger
 
 log = get_logger(component="updater")
 
-# Project root: four levels up from this file (serve/ -> codehome/ -> src/ -> codehome/).
+# Project root: four levels up from this file (serve/ -> supervisor/ -> src/ -> super/).
 _PROJECT_ROOT = Path(__file__).resolve().parents[3]
 
 

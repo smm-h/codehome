@@ -20,7 +20,7 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Any
 
 from codehome.config import load_repos
-from codehome.paths import repo_anchor, repo_branches, resolve_global, superv_home
+from codehome.paths import repo_anchor, repo_branches, resolve_global, codehome_home
 from codehome.serve.logging_config import get_logger
 from codehome.serve.roster import TeamMember, all_members
 from codehome.serve.subprocess_utils import run_gh, run_git, safe_gh_repo
@@ -230,7 +230,7 @@ def collect_linear_stats(member: TeamMember, linear_token: str | None = None) ->
     if not linear_token:
         return None
 
-    from codehome.linear_shared import LinearAPIError, graphql_with_token
+    from codehome.linear.linear_shared import LinearAPIError, graphql_with_token
 
     # Look up the Linear user ID for this member. First try the viewer
     # endpoint (works when the token belongs to this member), then fall
@@ -276,7 +276,7 @@ def _resolve_linear_user_id(member: TeamMember, token: str) -> str | None:
     viewer's email matches one of the member's emails, use that ID.
     Otherwise, search Linear users by the member's emails.
     """
-    from codehome.linear_shared import LinearAPIError, graphql_with_token
+    from codehome.linear.linear_shared import LinearAPIError, graphql_with_token
 
     # Try viewer first (cheapest API call).
     try:
@@ -351,18 +351,18 @@ def collect_all_stats(
 
 
 def save_stats(stats: dict[str, dict[str, Any]]) -> None:
-    """Save stats to ~/.superv/cache/team-stats.json."""
+    """Save stats to ~/.codehome/cache/team-stats.json."""
     payload = {
         "_refreshed_at": datetime.now(tz=UTC).isoformat(),
         **stats,
     }
-    dest = superv_home() / _STATS_CACHE_REL
+    dest = codehome_home() / _STATS_CACHE_REL
     dest.parent.mkdir(parents=True, exist_ok=True)
     dest.write_text(json.dumps(payload, indent=2) + "\n")
 
 
 def load_cached_stats() -> dict[str, dict[str, Any]] | None:
-    """Load stats from cache (prefers ~/.superv/, falls back to .supervisor/)."""
+    """Load stats from cache (prefers ~/.codehome/, falls back to .supervisor/)."""
     cache_path = resolve_global(_STATS_CACHE_REL)
     if not cache_path.is_file():
         return None

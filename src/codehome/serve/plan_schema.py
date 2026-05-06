@@ -12,11 +12,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from codehome.paths import resolve_global, superv_home
+from codehome.paths import resolve_global, codehome_home
 
 # Read: dual-path fallback. Write: canonical new location.
 _PLANS_DIR_READ = resolve_global("plans")
-_PLANS_DIR_WRITE = superv_home() / "plans"
+_PLANS_DIR_WRITE = codehome_home() / "plans"
 
 
 @dataclass

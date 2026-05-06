@@ -555,8 +555,8 @@ def get_branches_table() -> list[dict[str, Any]]:
     sequential git command overhead. Reads Linear data from the local
     cache and PR data from prs.json -- no external API calls.
     """
-    from codehome.aliases import reverse_aliases
-    from codehome.linear_shared import load_cache as load_linear_cache
+    from codehome.supervisor.aliases import reverse_aliases
+    from codehome.linear.linear_shared import load_cache as load_linear_cache
 
     # Load shared data once (read by all threads).
     linear_cache = load_linear_cache()

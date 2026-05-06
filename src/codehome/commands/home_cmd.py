@@ -1,12 +1,12 @@
-"""superv home: show and bootstrap the global ~/.superv/ directory."""
+"""codehome home: show and bootstrap the global ~/.codehome/ directory."""
 
 import argparse
 from pathlib import Path
 
-from codehome.paths import superv_home
+from codehome.paths import codehome_home
 
 
-# Subdirectories created by `superv home` (the skeleton).
+# Subdirectories created by `codehome home` (the skeleton).
 # db.sqlite, config.toml, projects.toml are created on demand by
 # their respective features -- not pre-created here.
 _SKELETON_DIRS = (
@@ -17,19 +17,19 @@ _SKELETON_DIRS = (
 
 
 def cmd_home(args: argparse.Namespace) -> None:
-    """Show the superv home directory, creating the skeleton if needed.
+    """Show the codehome home directory, creating the skeleton if needed.
 
     Prints the home path and the status of each expected subdirectory
     (exists / created / empty).
     """
-    home = superv_home()
+    home = codehome_home()
     created_home = not home.exists()
     home.mkdir(parents=True, exist_ok=True)
 
     if created_home:
-        print(f"superv home: {home}  (created)")
+        print(f"codehome home: {home}  (created)")
     else:
-        print(f"superv home: {home}")
+        print(f"codehome home: {home}")
 
     # Ensure skeleton subdirs exist.
     for name in _SKELETON_DIRS:

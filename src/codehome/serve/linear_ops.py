@@ -12,43 +12,43 @@ from __future__ import annotations
 
 from typing import Any
 
-from codehome.linear_shared import (
+from codehome.linear.linear_shared import (
     create_comment as _create_comment,
 )
-from codehome.linear_shared import (
+from codehome.linear.linear_shared import (
     delete_comment as _delete_comment,
 )
-from codehome.linear_shared import (
+from codehome.linear.linear_shared import (
     emit_linear_outgoing,
 )
-from codehome.linear_shared import (
+from codehome.linear.linear_shared import (
     fetch_comments as _fetch_comments,
 )
-from codehome.linear_shared import (
+from codehome.linear.linear_shared import (
     fetch_issue as _fetch_issue,
 )
-from codehome.linear_shared import (
+from codehome.linear.linear_shared import (
     get_linked_issue as _get_linked_issue,
 )
-from codehome.linear_shared import (
+from codehome.linear.linear_shared import (
     issue_file as _issue_file,
 )
-from codehome.linear_shared import (
+from codehome.linear.linear_shared import (
     load_cache as _load_cache,
 )
-from codehome.linear_shared import (
+from codehome.linear.linear_shared import (
     load_issue_link as _load_issue_link,
 )
-from codehome.linear_shared import (
+from codehome.linear.linear_shared import (
     load_token as _load_env_token,
 )
-from codehome.linear_shared import (
+from codehome.linear.linear_shared import (
     load_workflows as _load_workflows,
 )
-from codehome.linear_shared import (
+from codehome.linear.linear_shared import (
     save_issue_link as _save_issue_link,
 )
-from codehome.linear_shared import (
+from codehome.linear.linear_shared import (
     update_issue as _update_issue,
 )
 from codehome.serve.logging_config import get_logger

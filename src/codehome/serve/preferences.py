@@ -16,7 +16,7 @@ import threading
 from pathlib import Path
 from typing import Any
 
-from codehome.paths import resolve_global, superv_home
+from codehome.paths import resolve_global, codehome_home
 from codehome.serve.file_lock import write_json_locked
 
 # -- Namespaced preferences (per-user files) --------------------------------
@@ -26,7 +26,7 @@ _ns_lock = threading.Lock()
 
 # Read: dual-path fallback. Write: canonical new location.
 _PREFS_DIR_READ = resolve_global("preferences")
-_PREFS_DIR_WRITE = superv_home() / "preferences"
+_PREFS_DIR_WRITE = codehome_home() / "preferences"
 
 
 def _user_file_read(username: str) -> Path:
@@ -83,7 +83,7 @@ def delete_preference(username: str, key: str) -> None:
 _user_prefs_lock = threading.Lock()
 
 _PREFS_FILE_READ = resolve_global("preferences.json")
-_PREFS_FILE_WRITE = superv_home() / "preferences.json"
+_PREFS_FILE_WRITE = codehome_home() / "preferences.json"
 
 DEFAULT_PREFERENCES: dict[str, str | int] = {
     "metrics_variant": "sparkline",  # "chartjs" | "sparkline" | "canvas"
@@ -161,7 +161,7 @@ def set_user_preferences(username: str, updates: dict[str, Any]) -> None:
 _global_prefs_lock = threading.Lock()
 
 _GLOBAL_PREFS_READ = resolve_global("global_preferences.json")
-_GLOBAL_PREFS_WRITE = superv_home() / "global_preferences.json"
+_GLOBAL_PREFS_WRITE = codehome_home() / "global_preferences.json"
 
 
 def _load_global_all() -> dict[str, Any]:

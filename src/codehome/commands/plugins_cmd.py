@@ -65,7 +65,7 @@ def _cmd_rescan(args: argparse.Namespace) -> None:
         write_events_toml,
     )
 
-    result = discover_plugins(ROOT)
+    result = discover_plugins()
     old_state = load_state(ROOT)
     old_names = set(old_state.get("plugins", {}).keys())
 
@@ -157,7 +157,7 @@ def _find_dependents(plugin_name: str) -> list[str]:
     plugins_state = state.get("plugins", {})
 
     # Discover from disk to get manifests with dependency info.
-    result = discover_plugins(ROOT)
+    result = discover_plugins()
 
     dependents = []
     for _plugin_dir, manifest in result.plugins:
@@ -199,7 +199,7 @@ def _set_enabled(args: argparse.Namespace, *, enabled: bool) -> None:
 # ---------------------------------------------------------------------------
 
 # Default git remote URL for fetching plugins when plugin-store/ is not local.
-_DEFAULT_STORE_REPO = "git@gp:smm-h/superv.git"
+_DEFAULT_STORE_REPO = "git@gp:smm-h/codehome.git"
 
 
 def _cmd_install(args: argparse.Namespace) -> None:
@@ -214,7 +214,7 @@ def _cmd_install(args: argparse.Namespace) -> None:
     ``v plugins install <name>``
         Copy the named plugin from the local ``plugin-store/`` directory
         (development mode) or fetch it via git sparse checkout (installed
-        mode) into ``~/.superv/plugins/<name>/``.  Validates that the
+        mode) into ``~/.codehome/plugins/<name>/``.  Validates that the
         installed directory contains a ``plugin.toml``, then triggers a
         rescan so the plugin is immediately registered.
     """
@@ -250,10 +250,10 @@ def _install_list() -> None:
         print("No plugins listed in the plugin-store index.")
         return
 
-    # Check which are already installed in ~/.superv/plugins/.
-    from codehome.paths import superv_home
+    # Check which are already installed in ~/.codehome/plugins/.
+    from codehome.paths import codehome_home
 
-    user_plugins_dir = superv_home() / "plugins"
+    user_plugins_dir = codehome_home() / "plugins"
 
     print(f"Available plugins ({len(plugins)}):\n")
     for entry in plugins:
@@ -275,7 +275,7 @@ def _fetch_remote_index() -> dict[str, Any] | None:
     import urllib.request
     import urllib.error
 
-    url = "https://raw.githubusercontent.com/smm-h/superv/main/plugin-store/index.toml"
+    url = "https://raw.githubusercontent.com/smm-h/codehome/main/plugin-store/index.toml"
     try:
         with urllib.request.urlopen(url, timeout=10) as resp:
             raw = resp.read()
@@ -285,13 +285,13 @@ def _fetch_remote_index() -> dict[str, Any] | None:
 
 
 def _install_plugin(name: str) -> None:
-    """Install a single plugin by name into ~/.superv/plugins/<name>/."""
+    """Install a single plugin by name into ~/.codehome/plugins/<name>/."""
     import shutil
     from pathlib import Path
 
-    from codehome.paths import superv_home
+    from codehome.paths import codehome_home
 
-    user_plugins_dir = superv_home() / "plugins"
+    user_plugins_dir = codehome_home() / "plugins"
     dest = user_plugins_dir / name
 
     if (dest / "plugin.toml").is_file():
@@ -373,7 +373,7 @@ def _install_via_sparse_checkout(name: str, dest: Path) -> None:
     # Determine the repo URL: check config.toml, then fall back to default.
     repo_url = _get_store_repo_url()
 
-    tmpdir = Path(tempfile.mkdtemp(prefix="superv-plugin-"))
+    tmpdir = Path(tempfile.mkdtemp(prefix="codehome-plugin-"))
     try:
         # Shallow sparse clone.
         subprocess.run(
@@ -418,15 +418,15 @@ def _cmd_update(args: argparse.Namespace) -> None:
     """Update a plugin (or all) by re-installing from the plugin-store.
 
     ``v plugins update <name>``
-        Delete the installed copy at ``~/.superv/plugins/<name>/`` and
+        Delete the installed copy at ``~/.codehome/plugins/<name>/`` and
         re-install from source (local plugin-store or sparse checkout).
 
     ``v plugins update --all``
-        Re-install every plugin currently in ``~/.superv/plugins/``.
+        Re-install every plugin currently in ``~/.codehome/plugins/``.
     """
     import shutil
 
-    from codehome.paths import superv_home
+    from codehome.paths import codehome_home
 
     update_all = getattr(args, "update_all", False)
     name = getattr(args, "name", None)
@@ -434,12 +434,12 @@ def _cmd_update(args: argparse.Namespace) -> None:
     if not update_all and not name:
         die("plugin name required. Use --all to update all installed plugins.")
 
-    user_plugins_dir = superv_home() / "plugins"
+    user_plugins_dir = codehome_home() / "plugins"
 
     if update_all:
         names = _list_installed_plugins(user_plugins_dir)
         if not names:
-            print("No user-installed plugins found in ~/.superv/plugins/.")
+            print("No user-installed plugins found in ~/.codehome/plugins/.")
             return
         print(f"Updating {len(names)} plugin(s): {', '.join(sorted(names))}\n")
     else:
@@ -482,12 +482,12 @@ def _list_installed_plugins(user_plugins_dir: Path) -> list[str]:
 def _get_store_repo_url() -> str:
     """Read the plugin store repo URL from config, or return the default.
 
-    Checks ~/.superv/config.toml for a ``plugin_store_repo`` key.
+    Checks ~/.codehome/config.toml for a ``plugin_store_repo`` key.
     """
     import tomllib
-    from codehome.paths import superv_home
+    from codehome.paths import codehome_home
 
-    config_path = superv_home() / "config.toml"
+    config_path = codehome_home() / "config.toml"
     if config_path.is_file():
         try:
             data = tomllib.loads(config_path.read_text())
