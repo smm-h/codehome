@@ -40,7 +40,7 @@ def cmd_plugins(args: argparse.Namespace) -> None:
     ``v plugins update <name>`` -- re-install a plugin from the plugin-store
     ``v plugins update --all`` -- re-install all user-installed plugins
     """
-    from codehome.supervisor.cli_helpers import dispatch_subcommand
+    from codehome.cli_utils import dispatch_subcommand
 
     dispatch_subcommand(
         args,

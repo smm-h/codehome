@@ -28,7 +28,7 @@ class PluginNotInstalledError(ImportError):
 
 # Core codehome packages (not provided by plugins).
 _CORE_PACKAGES = frozenset({
-    "bus", "checks", "cli", "commands", "config", "conductor",
+    "bus", "checks", "cli", "cli_utils", "commands", "config", "conductor",
     "credentials", "dispatch", "dynamic_import", "features", "http_client",
     "mcp", "paths", "plugins", "pty", "serve", "service_protocols",
     "session", "shared", "state", "subprocesses", "utils",
@@ -63,7 +63,7 @@ _LAZY_IMPORTS: dict[str, tuple[str, str | None]] = {
     "build_parser": ("codehome.cli", "build_parser"),
     "add_branch_flag": ("codehome.supervisor.cli_helpers", "add_branch_flag"),
     "add_deploy_flags": ("codehome.supervisor.cli_helpers", "add_deploy_flags"),
-    "dispatch_subcommand": ("codehome.supervisor.cli_helpers", "dispatch_subcommand"),
+    "dispatch_subcommand": ("codehome.cli_utils", "dispatch_subcommand"),
     "resolve_optional": ("codehome.supervisor.cli_helpers", "resolve_optional"),
     # -- Credentials (token store) --
     "delete_token": ("codehome.credentials", "delete_token"),
