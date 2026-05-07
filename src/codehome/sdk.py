@@ -21,6 +21,31 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from pathlib import Path
 
+
+class PluginNotInstalledError(ImportError):
+    """Raised when an SDK symbol requires a plugin that isn't installed."""
+
+
+# Core codehome packages (not provided by plugins).
+_CORE_PACKAGES = frozenset({
+    "bus", "checks", "cli", "commands", "config", "conductor",
+    "dynamic_import", "features", "http_client", "mcp", "paths",
+    "plugins", "serve", "service_protocols", "shared", "state", "utils",
+})
+
+
+def _plugin_name_from_module(module_path: str) -> str | None:
+    """Return the plugin name if *module_path* is plugin-provided, else None.
+
+    Plugin modules live under ``codehome.<plugin>.*`` where ``<plugin>``
+    is NOT one of the core packages.
+    """
+    parts = module_path.split(".")
+    if len(parts) >= 2 and parts[0] == "codehome" and parts[1] not in _CORE_PACKAGES:
+        return parts[1]
+    return None
+
+
 # Mapping: symbol_name -> (module_path, attribute_name)
 # When attr_name is None, the module itself is returned (module re-export).
 # When attr_name differs from symbol_name, it acts as a rename
@@ -127,7 +152,17 @@ def __getattr__(name: str):
     """Lazy import: resolve symbols on first access, then cache in globals()."""
     if name in _LAZY_IMPORTS:
         module_path, attr_name = _LAZY_IMPORTS[name]
-        mod = importlib.import_module(module_path)
+        try:
+            mod = importlib.import_module(module_path)
+        except ModuleNotFoundError:
+            plugin = _plugin_name_from_module(module_path)
+            if plugin is not None:
+                raise PluginNotInstalledError(
+                    f"'{name}' requires the '{plugin}' plugin "
+                    f"({module_path}). Install the plugin or check "
+                    f"your [plugins] paths configuration."
+                ) from None
+            raise
         if attr_name is None:
             val = mod  # module re-export
         else:
@@ -201,6 +236,7 @@ def get_plugin_cache_dir(plugin_name: str, key: str) -> Path:
 
 
 __all__ = [
+    "PluginNotInstalledError",
     "PROTECTED_BRANCHES",
     "REPOS_DIR",
     "ROOT",
