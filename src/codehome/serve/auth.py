@@ -45,7 +45,7 @@ def hash_password(plain: str) -> str:
     return bcrypt.hashpw(plain.encode(), bcrypt.gensalt()).decode()
 
 
-def create_token(username: str, role: str, secret: str, expires_hours: int = 24) -> str:
+def create_token(username: str, role: str, secret: str, expires_hours: int = 720) -> str:
     """Create a signed JWT with sub, role, exp, and iat claims."""
     now = datetime.now(UTC)
     payload = {
