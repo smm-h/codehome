@@ -90,3 +90,40 @@ class RevengGaps(Protocol):  # noqa: dead-code
     """reveng.gaps -- return gap report for a branch."""
 
     def __call__(self, ctx_or_branch: str | None = None) -> dict[str, Any] | None: ...
+
+
+# ---------------------------------------------------------------------------
+# supervisor plugin -- project layout
+# ---------------------------------------------------------------------------
+
+
+class ProjectLayout(Protocol):
+    """supervisor.layout -- filesystem path resolution for repos and branches.
+
+    Abstracts the multi-repo worktree directory layout so that core
+    modules (e.g. serve/) can resolve paths without importing the
+    supervisor plugin directly.
+    """
+
+    @property
+    def REPOS_DIR(self) -> Path: ...
+
+    def repo_dir(self, repo: str) -> Path: ...
+
+    def branch_dir(self, repo: str, branch: str) -> Path: ...
+
+    def worktree_path(self, repo: str, branch: str) -> Path: ...
+
+    def repo_anchor(self, repo: str) -> Path: ...
+
+    def repo_branches(self, repo: str) -> Path: ...
+
+    def base_ref(self, repo: str, branch: str) -> str: ...
+
+    def prod_ref(self, repo: str) -> str: ...
+
+    def staging_worktree(self, repo: str) -> Path: ...
+
+    def branch_name_from_wt(self, wt_path: Path) -> str: ...
+
+    def tests_file(self, repo: str, branch: str) -> Path: ...
