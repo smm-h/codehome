@@ -29,9 +29,9 @@ class PluginNotInstalledError(ImportError):
 # Core codehome packages (not provided by plugins).
 _CORE_PACKAGES = frozenset({
     "bus", "checks", "cli", "commands", "config", "conductor",
-    "dispatch", "dynamic_import", "features", "http_client", "mcp",
-    "paths", "plugins", "pty", "serve", "service_protocols", "session",
-    "shared", "state", "utils",
+    "credentials", "dispatch", "dynamic_import", "features", "http_client",
+    "mcp", "paths", "plugins", "pty", "serve", "service_protocols",
+    "session", "shared", "state", "utils",
 })
 
 
@@ -65,6 +65,12 @@ _LAZY_IMPORTS: dict[str, tuple[str, str | None]] = {
     "add_deploy_flags": ("codehome.supervisor.cli_helpers", "add_deploy_flags"),
     "dispatch_subcommand": ("codehome.supervisor.cli_helpers", "dispatch_subcommand"),
     "resolve_optional": ("codehome.supervisor.cli_helpers", "resolve_optional"),
+    # -- Credentials (token store) --
+    "delete_token": ("codehome.credentials", "delete_token"),
+    "get_token": ("codehome.credentials", "get_token"),
+    "has_token": ("codehome.credentials", "has_token"),
+    "list_connections": ("codehome.credentials", "list_connections"),
+    "store_token": ("codehome.credentials", "store_token"),
     # -- Config --
     "RepoConfig": ("codehome.supervisor.repo_config", "RepoConfig"),
     "get_repo": ("codehome.supervisor.repo_config", "get_repo"),
@@ -267,6 +273,7 @@ __all__ = [
     "build_parser",
     "cli_defaults",
     "cyan",
+    "delete_token",
     "delete_local_branch",
     "delete_remote_branch",
     "die",
@@ -278,6 +285,7 @@ __all__ = [
     "get_current_user",
     "get_gh_token",
     "get_plugin_cache_dir",
+    "get_token",
     "get_process_id",
     "get_repo",
     "gh_api",
@@ -285,7 +293,9 @@ __all__ = [
     "git",
     "git_passthrough",
     "green",
+    "has_token",
     "is_worktree_locked",
+    "list_connections",
     "list_repos",
     "list_worktrees",
     "load_json",
@@ -313,6 +323,7 @@ __all__ = [
     "server_url",
     "services",
     "staging_worktree",
+    "store_token",
     "codehome_home",
     "tests_file",
     "warn",

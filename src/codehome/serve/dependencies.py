@@ -109,7 +109,7 @@ def get_gh_token(request: Request) -> str | None:
     Uses the unified connections store which already falls back to the
     legacy github_tokens.py store internally.
     """
-    from codehome.supervisor.ops.connections import get_token
+    from codehome.credentials import get_token
 
     user = getattr(request.state, "_user", None)
     if not user:

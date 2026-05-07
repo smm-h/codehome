@@ -87,7 +87,7 @@ def _get_slack_token(jwt_secret: str) -> tuple[str | None, str | None]:
     through all roster members and return the first one that has a Slack
     token stored. Returns (token, username) or (None, None).
     """
-    from codehome.supervisor.ops.connections import get_token
+    from codehome.credentials import get_token
 
     for member in all_members():
         token = get_token(member.handle, "slack", jwt_secret)
