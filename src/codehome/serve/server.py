@@ -101,20 +101,17 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.update_checker = update_checker
     update_checker.start()
 
-    # Background git fetch scheduler: keeps remote branch state fresh.
-    from codehome.serve.fetch_scheduler import fetch_scheduler
+    # Background git fetch scheduler: registered as a background task by the
+    # supervisor plugin (started via background_tasks.start_all() below).
+    # Expose on app.state for the manual-trigger API endpoint.
+    try:
+        from codehome.supervisor.ops.fetch_scheduler import fetch_scheduler
+        app.state.fetch_scheduler = fetch_scheduler
+    except ImportError:
+        pass  # supervisor plugin not loaded
 
-    fetch_scheduler.start()
-    app.state.fetch_scheduler = fetch_scheduler
-
-    # Slack notification dispatcher: sends DMs for key SSE events.
-    slack_notifier = None
-    if features.enabled("slack"):
-        from codehome.serve.slack_notify import SlackNotifier
-
-        slack_notifier = SlackNotifier(events, config.jwt_secret)
-        slack_notifier.start()
-        app.state.slack_notifier = slack_notifier
+    # Slack notification dispatcher: registered as a background task by the
+    # supervisor plugin (started via background_tasks.start_all() below).
 
     # SQLite-backed error log for frontend diagnostics and internal errors.
     from codehome.serve.error_log import ErrorLog
@@ -183,8 +180,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
             vite_drain_task.cancel()
     if _vite_proxy is not None:
         await _vite_proxy.close()
-    if slack_notifier is not None:
-        slack_notifier.stop()
     # Stop plugin-contributed background tasks.
     background_tasks.stop_all()
     # Stop all active Conductor sessions to avoid orphaned processes.
@@ -211,7 +206,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         metrics_collector.stop()
         metrics_task.cancel()
     update_checker.stop()
-    fetch_scheduler.stop()
     if features.enabled("terminal"):
         from codehome.pty import pty_manager
 
