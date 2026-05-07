@@ -1,0 +1,19 @@
+# codehome configuration -- place at ~/.codehome/config.toml
+
+[plugins]
+# Directories to scan for plugins. Each entry is a path containing
+# plugin subdirectories (each with a plugin.toml manifest).
+# Tilde (~) is expanded. Relative paths are NOT supported.
+#
+# If this file does not exist or [plugins] paths is unset, codehome
+# falls back to scanning ROOT/plugins/ (the package's own plugins
+# directory). Once you set paths, the ROOT fallback is disabled --
+# list every directory you want scanned.
+#
+# ~/.codehome/plugins/ is always scanned as a second tier (for plugins
+# installed via `v plugins install`). Configured paths here take
+# priority: if a plugin name appears in both a configured path and
+# ~/.codehome/plugins/, the configured one wins.
+paths = [
+    "~/Work/super/plugins",
+]
