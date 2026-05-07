@@ -39,6 +39,16 @@ exclude = [
     "src/codehome/serve/static/",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+
 [project.urls]
 Homepage = "https://codehome.org"
 Repository = "https://github.com/smm-h/codehome"
