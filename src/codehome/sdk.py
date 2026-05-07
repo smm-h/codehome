@@ -31,7 +31,7 @@ _CORE_PACKAGES = frozenset({
     "bus", "checks", "cli", "commands", "config", "conductor",
     "credentials", "dispatch", "dynamic_import", "features", "http_client",
     "mcp", "paths", "plugins", "pty", "serve", "service_protocols",
-    "session", "shared", "state", "utils",
+    "session", "shared", "state", "subprocesses", "utils",
 })
 
 
@@ -136,6 +136,12 @@ _LAZY_IMPORTS: dict[str, tuple[str, str | None]] = {
     "StateStore": ("codehome.state", "StateStore"),
     "lock": ("codehome.state", "lock"),
     "services": ("codehome.state", "services"),
+    # -- Subprocesses --
+    "OutputCallback": ("codehome.subprocesses", "OutputCallback"),
+    "parse_numstat_line": ("codehome.subprocesses", "parse_numstat_line"),
+    "run_gh": ("codehome.subprocesses", "run_gh"),
+    "run_git": ("codehome.subprocesses", "run_git"),
+    "run_streaming": ("codehome.subprocesses", "run_streaming"),
     # -- Utils --
     "USE_COLOR": ("codehome.utils", "USE_COLOR"),
     "atomic_json_write": ("codehome.utils", "atomic_json_write"),
@@ -252,6 +258,7 @@ __all__ = [
     "TOKEN_FILE",
     "USE_COLOR",
     "BranchContext",
+    "OutputCallback",
     "CommandError",
     "CommandProgress",
     "CommandResult",
@@ -305,6 +312,7 @@ __all__ = [
     "magenta",
     "on",
     "open_url",
+    "parse_numstat_line",
     "parse_qualified",
     "prod_ref",
     "read_server_url",
@@ -319,6 +327,9 @@ __all__ = [
     "resolve_global",
     "resolve_optional",
     "run_command",
+    "run_gh",
+    "run_git",
+    "run_streaming",
     "server_running",
     "server_url",
     "services",

@@ -13,7 +13,7 @@ from codehome.utils import warn
 if TYPE_CHECKING:
     from pathlib import Path
 
-    from codehome.supervisor.ops.subprocess_utils import OutputCallback
+    from codehome.subprocesses import OutputCallback
 
 _DEFAULT_SUPABASE_VERSION = "2.90.1"
 
@@ -100,7 +100,7 @@ def start_streaming(
     exclude: list[str] | None = None,
 ) -> tuple[bool, str]:
     """Start Supabase with line-by-line output streaming."""
-    from codehome.supervisor.ops.subprocess_utils import run_streaming
+    from codehome.subprocesses import run_streaming
 
     exc = list(ALWAYS_EXCLUDE) + (exclude or [])
     cmd = [*supabase_cmd(wt), "start", "--workdir", str(wt), "-x", ",".join(exc)]
@@ -112,7 +112,7 @@ def start_streaming(
 
 def stop_streaming(wt: Path, callback: OutputCallback) -> tuple[bool, str]:
     """Stop Supabase with line-by-line output streaming."""
-    from codehome.supervisor.ops.subprocess_utils import run_streaming
+    from codehome.subprocesses import run_streaming
 
     cmd = [*supabase_cmd(wt), "stop", "--workdir", str(wt)]
     ok, msg = run_streaming(cmd, callback, timeout=TIMEOUT_SB_STOP)
