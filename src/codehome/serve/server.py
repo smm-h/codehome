@@ -84,7 +84,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     if features.enabled("monitoring"):
         app.state.metrics_collector = metrics_collector
     if features.enabled("terminal"):
-        from codehome.supervisor.ops.pty_manager import pty_manager
+        from codehome.pty import pty_manager
 
         app.state.pty_manager = pty_manager
     if features.enabled("conductor"):
@@ -207,7 +207,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     update_checker.stop()
     fetch_scheduler.stop()
     if features.enabled("terminal"):
-        from codehome.supervisor.ops.pty_manager import pty_manager
+        from codehome.pty import pty_manager
 
         await pty_manager.cleanup_all()
     error_log.close()

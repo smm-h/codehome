@@ -29,8 +29,9 @@ class PluginNotInstalledError(ImportError):
 # Core codehome packages (not provided by plugins).
 _CORE_PACKAGES = frozenset({
     "bus", "checks", "cli", "commands", "config", "conductor",
-    "dynamic_import", "features", "http_client", "mcp", "paths",
-    "plugins", "serve", "service_protocols", "shared", "state", "utils",
+    "dispatch", "dynamic_import", "features", "http_client", "mcp",
+    "paths", "plugins", "pty", "serve", "service_protocols", "session",
+    "shared", "state", "utils",
 })
 
 
@@ -70,9 +71,9 @@ _LAZY_IMPORTS: dict[str, tuple[str, str | None]] = {
     "load_server_config": ("codehome.config", "load_server_config"),
     "list_repos": ("codehome.supervisor.repo_config", "load_repos"),  # renamed re-export
     # -- Dispatch --
-    "dispatched": ("codehome.supervisor.dispatch", "dispatched"),
-    "server_running": ("codehome.supervisor.dispatch", "server_running"),
-    "server_url": ("codehome.supervisor.dispatch", "server_url"),
+    "dispatched": ("codehome.dispatch", "dispatched"),
+    "server_running": ("codehome.dispatch", "server_running"),
+    "server_url": ("codehome.dispatch", "server_url"),
     # -- Git operations --
     "delete_local_branch": ("codehome.supervisor.git", "delete_local_branch"),
     "delete_remote_branch": ("codehome.supervisor.git", "delete_remote_branch"),
@@ -121,7 +122,7 @@ _LAZY_IMPORTS: dict[str, tuple[str, str | None]] = {
     "CommandProgress": ("codehome.serve.sdui.commands", "CommandProgress"),
     "CommandResult": ("codehome.serve.sdui.commands", "CommandResult"),
     # -- Session --
-    "get_process_id": ("codehome.supervisor.session", "get_process_id"),
+    "get_process_id": ("codehome.session", "get_process_id"),
     # -- State (storage APIs) --
     "ConfigStore": ("codehome.state", "ConfigStore"),
     "FileStore": ("codehome.state", "FileStore"),

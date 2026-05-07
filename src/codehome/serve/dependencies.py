@@ -29,7 +29,7 @@ from codehome.serve.services import ServiceManager
 from codehome.serve.updater import UpdateChecker
 
 if TYPE_CHECKING:
-    from codehome.supervisor.ops.pty_manager import PTYManager
+    from codehome.pty import PTYManager
 
 # app.state attributes are always ``Any`` in Starlette's type stubs.
 # We use ``cast()`` to tell mypy the actual type stored by the lifespan.
