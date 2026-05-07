@@ -63,7 +63,7 @@ async def health_check() -> object:
     Returns server status information and HTTP 200 if healthy,
     503 if critical issues detected.
     """
-    from codehome.supervisor.ops.system_ops import build_health_status
+    from codehome.serve.system import build_health_status
 
     result = await build_health_status()
     return JSONResponse(content=result["body"], status_code=result["status_code"])
@@ -84,7 +84,7 @@ _LOGO_MAX_BYTES = 1 * 1024 * 1024  # 1 MB
 @public_router.get("/api/branding/logo")
 async def get_branding_logo() -> FileResponse:
     """Serve the stored logo file (public, no auth)."""
-    from codehome.supervisor.ops.system_ops import find_logo
+    from codehome.serve.system import find_logo
 
     logo = await asyncio.to_thread(find_logo)
     if logo is None:
