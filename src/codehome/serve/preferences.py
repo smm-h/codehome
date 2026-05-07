@@ -91,6 +91,9 @@ DEFAULT_PREFERENCES: dict[str, str | int] = {
     "language": "en",  # "en" | "it"
     "autonomy": 2,  # 0-4, controls conductor auto-decision level
     "accent_color": "indigo",  # accent palette id (see dashboard/src/lib/accent.ts)
+    "nav_layout": "second-row",
+    "home_preset": "status-board",
+    "plugin_display_mode": "chrome",
 }
 
 # Allowed values per preference key -- used for validation.
@@ -111,6 +114,9 @@ ALLOWED_VALUES: dict[str, set[str] | set[int]] = {
         "red",
         "purple",
     },
+    "nav_layout": {"second-row", "dropdown", "inline-swap", "flat-tabs"},
+    "home_preset": {"activity", "status-board", "compact"},
+    "plugin_display_mode": {"chrome", "seamless"},
 }
 
 

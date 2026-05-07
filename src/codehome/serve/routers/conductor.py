@@ -21,6 +21,7 @@ from codehome.serve.conductor_ops import (
     op_get_messages,
     op_get_plan,
     op_list_plans,
+    op_list_sessions,
     op_pause_plan,
     op_receive_ui_message,
     op_resume_plan,
@@ -38,6 +39,14 @@ from codehome.serve.events import EventManager
 from codehome.serve.questions import QuestionStore
 
 router = APIRouter()
+
+
+@router.get("/api/conductor/sessions")
+async def api_conductor_sessions(
+    user: dict[str, str] = Depends(get_current_user),
+) -> object:
+    """List all active conductor sessions across branches."""
+    return op_list_sessions()
 
 
 class ConductorBranchRequest(BaseModel):

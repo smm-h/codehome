@@ -413,6 +413,35 @@ class Table(_PrimitiveBase):
         return "table"
 
 
+class DataGridColumnDef(BaseModel):
+    """A column definition for DataGrid."""
+
+    key: str
+    label: str
+    sortable: bool = True
+    filterable: bool = True
+    width: int | None = None
+
+
+class DataGrid(_PrimitiveBase):
+    """Interactive data grid with sorting, filtering, and pagination.
+
+    Serialises as type ``data-grid``.  The frontend DataGrid component
+    handles client-side sorting, filtering, column reorder, and
+    persistence via localStorage.
+    """
+
+    columns: list[DataGridColumnDef] = []
+    data: list[dict[str, Any]] = []
+    page_size: int = 25
+    total_rows: int | None = None
+    sortable: bool = True
+    filterable: bool = True
+
+    def _node_type(self) -> str:
+        return "data-grid"
+
+
 class List(_PrimitiveBase):
     """Iterable list whose children are stamped per item.
 

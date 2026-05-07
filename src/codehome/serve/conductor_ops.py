@@ -16,6 +16,7 @@ from codehome.serve.agent_sessions import AgentSessionManager
 from codehome.serve.conductor import (
     create_conductor_token,
     get_session,
+    list_sessions,
     start_session,
     stop_session,
 )
@@ -59,6 +60,10 @@ def resolve_worktree(qualified_branch: str) -> tuple[str, str, Path]:
 
 
 # -- Conductor session ops ----------------------------------------------------
+
+
+def op_list_sessions() -> list[dict[str, Any]]:
+    return list_sessions()
 
 
 async def op_start_conductor(

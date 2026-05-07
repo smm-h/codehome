@@ -215,6 +215,10 @@ class ConductorSession:
 # -- Public API ----------------------------------------------------------------
 
 
+def list_sessions() -> list[dict[str, Any]]:
+    return [s.to_dict() for s in _conductors.values()]
+
+
 def get_session(branch: str) -> ConductorSession | None:
     return _conductors.get(branch)
 

@@ -2,6 +2,8 @@
 
 from fastapi import APIRouter, Body
 
+from codehome.bus import Event
+from codehome.bus import fire as bus_fire
 from codehome.features import DEFAULTS, _write_overrides, all_flags, reload
 
 router = APIRouter(prefix="/api/features", tags=["features"])
@@ -38,4 +40,6 @@ async def update_flags(body: dict[str, bool] = Body()) -> dict[str, bool]:
 
     _write_overrides(current)
     reload()
-    return all_flags()
+    flags = all_flags()
+    await bus_fire(Event(name="feature.changed", payload={"flags": flags}))
+    return flags

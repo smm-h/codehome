@@ -173,6 +173,11 @@ def build_registry() -> EventRegistry:
     reg.register("figma2sdui.graph.updated", D, description="SDUI graph data changed (conversion ran)")
 
     # ------------------------------------------------------------------
+    # Feature flags
+    # ------------------------------------------------------------------
+    reg.register("feature.changed", D, description="Feature flags updated")
+
+    # ------------------------------------------------------------------
     # Ghosts (registered but never fired in current codebase)
     # ------------------------------------------------------------------
     # old: pipeline:update

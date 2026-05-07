@@ -93,6 +93,7 @@ async def auth_me(
     user: dict[str, Any] = Depends(get_current_user),
 ) -> object:
     """Return the current user's identity from their token."""
+    log.info("auth_me called, from_token_file=%s, user=%s", getattr(request.state, "_auth_from_token_file", False), user.get("sub"))
     if getattr(request.state, "_auth_from_token_file", False):
         token = TOKEN_FILE.read_text().strip()
         response.set_cookie(

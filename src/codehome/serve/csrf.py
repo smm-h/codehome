@@ -122,18 +122,18 @@ class CSRFMiddleware:
             await self.app(scope, receive, send)
             return
 
-        # Token-file auth (CLI logged in, browser has no cookies) is not
-        # vulnerable to CSRF -- the auth source is a local file, not a cookie.
-        if not _get_cookie(headers, "session"):
-            from codehome.http_client import _resolve_token_file
+        # Token-file auth (CLI logged in) is not vulnerable to CSRF -- the
+        # auth source is a local file, not a browser-only cookie. This applies
+        # regardless of whether a session cookie was bootstrapped from the file.
+        from codehome.http_client import _resolve_token_file
 
-            try:
-                tf = _resolve_token_file()
-                if tf.is_file() and tf.read_text().strip():
-                    await self.app(scope, receive, send)
-                    return
-            except OSError:
-                pass
+        try:
+            tf = _resolve_token_file()
+            if tf.is_file() and tf.read_text().strip():
+                await self.app(scope, receive, send)
+                return
+        except OSError:
+            pass
 
         # Validate double-submit: cookie value must match header value.
         cookie_token = _get_cookie(headers, "csrf_token")
