@@ -121,6 +121,12 @@ _LAZY_IMPORTS: dict[str, tuple[str, str | None]] = {
     "BackgroundTask": ("codehome.serve.background", "BackgroundTask"),
     "BackgroundTaskRegistry": ("codehome.serve.background", "BackgroundTaskRegistry"),
     "background_tasks": ("codehome.serve.background", "background_tasks"),
+    # -- Notifications (channel protocol, registry, shared vocabulary) --
+    "DEFAULT_PREFERENCES": ("codehome.serve.notifications", "DEFAULT_PREFERENCES"),
+    "EVENT_TO_CATEGORY": ("codehome.serve.notifications", "EVENT_TO_CATEGORY"),
+    "NotificationChannel": ("codehome.serve.notifications", "NotificationChannel"),
+    "NotificationRegistry": ("codehome.serve.notifications", "NotificationRegistry"),
+    "notification_registry": ("codehome.serve.notifications", "notification_registry"),
     # -- Serve --
     "read_server_url": ("codehome.serve", "read_server_url"),
     # -- FastAPI auth dependencies (for plugin routes) --
@@ -255,6 +261,10 @@ def get_plugin_cache_dir(plugin_name: str, key: str) -> Path:
 __all__ = [
     "BackgroundTask",
     "BackgroundTaskRegistry",
+    "DEFAULT_PREFERENCES",
+    "EVENT_TO_CATEGORY",
+    "NotificationChannel",
+    "NotificationRegistry",
     "PluginNotInstalledError",
     "PROTECTED_BRANCHES",
     "REPOS_DIR",
@@ -317,6 +327,7 @@ __all__ = [
     "load_sibling",
     "lock",
     "magenta",
+    "notification_registry",
     "on",
     "open_url",
     "parse_numstat_line",
