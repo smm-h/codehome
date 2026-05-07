@@ -12,6 +12,7 @@ from fastapi import Depends, FastAPI
 from codehome.config import load_server_config
 from codehome.paths import codehome_home
 from codehome.serve.agent_sessions import agent_sessions
+from codehome.serve.background import background_tasks
 from codehome.serve.auth_deps import get_current_user
 from codehome.serve.discovery import discover_docker, discover_running
 from codehome.serve.error_tracking import init_sentry
@@ -150,6 +151,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app.state.log_aggregator = log_aggregator
         log_task = asyncio.create_task(log_aggregator.run())
 
+    # Start plugin-contributed background tasks (respects feature gates).
+    background_tasks.start_all()
+
     # Dev mode: spawn Vite dev server for HMR and drain its output.
     vite_proc = None
     vite_drain_task = None
@@ -181,6 +185,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         await _vite_proxy.close()
     if slack_notifier is not None:
         slack_notifier.stop()
+    # Stop plugin-contributed background tasks.
+    background_tasks.stop_all()
     # Stop all active Conductor sessions to avoid orphaned processes.
     if features.enabled("conductor"):
         from codehome.serve.conductor import (

@@ -117,6 +117,10 @@ _LAZY_IMPORTS: dict[str, tuple[str, str | None]] = {
     "active_context": ("codehome.supervisor.resolution", "active_context"),
     "parse_qualified": ("codehome.supervisor.resolution", "parse_qualified"),
     "resolve": ("codehome.supervisor.resolution", "resolve"),
+    # -- Background tasks (for plugin-contributed recurring tasks) --
+    "BackgroundTask": ("codehome.serve.background", "BackgroundTask"),
+    "BackgroundTaskRegistry": ("codehome.serve.background", "BackgroundTaskRegistry"),
+    "background_tasks": ("codehome.serve.background", "background_tasks"),
     # -- Serve --
     "read_server_url": ("codehome.serve", "read_server_url"),
     # -- FastAPI auth dependencies (for plugin routes) --
@@ -249,6 +253,8 @@ def get_plugin_cache_dir(plugin_name: str, key: str) -> Path:
 
 
 __all__ = [
+    "BackgroundTask",
+    "BackgroundTaskRegistry",
     "PluginNotInstalledError",
     "PROTECTED_BRANCHES",
     "REPOS_DIR",
@@ -272,6 +278,7 @@ __all__ = [
     "add_branch_flag",
     "add_deploy_flags",
     "atomic_json_write",
+    "background_tasks",
     "base_ref",
     "blue",
     "bold",
