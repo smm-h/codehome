@@ -41,6 +41,17 @@ from codehome.serve.strategist import create_plan
 # -- Helpers ------------------------------------------------------------------
 
 
+def _get_layout() -> Any:
+    """Resolve the ProjectLayout service, raising if unavailable."""
+    from codehome.service_protocols import ProjectLayout
+    from codehome.state.service_registry import services
+
+    layout = services.get_typed("supervisor.layout", ProjectLayout)
+    if layout is None:
+        raise ValueError("ProjectLayout not registered (supervisor plugin not loaded)")
+    return layout
+
+
 def resolve_worktree(qualified_branch: str) -> tuple[str, str, Path]:
     """Parse 'repo:branch', validate worktree exists, return (repo, branch, path).
 
@@ -49,10 +60,9 @@ def resolve_worktree(qualified_branch: str) -> tuple[str, str, Path]:
     if ":" not in qualified_branch:
         raise ValueError("Branch must be qualified (repo:branch)")
 
-    from codehome.supervisor.paths import worktree_path as _wtp
-
+    layout = _get_layout()
     repo, branch = qualified_branch.split(":", 1)
-    wt = _wtp(repo, branch)
+    wt = layout.worktree_path(repo, branch)
     if not wt.is_dir():
         raise ValueError(f"Worktree not found: {qualified_branch}")
 
@@ -257,10 +267,9 @@ def op_execute_plan(
     if plan.status not in ("pending", "paused"):
         raise ValueError(f"Cannot execute plan in '{plan.status}' state")
 
-    from codehome.supervisor.paths import worktree_path as _wtp
-
+    layout = _get_layout()
     repo, branch = qualified.split(":", 1)
-    wt = str(_wtp(repo, branch))
+    wt = str(layout.worktree_path(repo, branch))
     server_url = f"http://127.0.0.1:{port}"
     agent_token = create_agent_token(jwt_secret, "plan-executor")
 
@@ -303,10 +312,9 @@ def op_resume_plan(
     if plan.status != "paused":
         raise ValueError(f"Cannot resume plan in '{plan.status}' state")
 
-    from codehome.supervisor.paths import worktree_path as _wtp
-
+    layout = _get_layout()
     repo, branch = qualified.split(":", 1)
-    wt = str(_wtp(repo, branch))
+    wt = str(layout.worktree_path(repo, branch))
     server_url = f"http://127.0.0.1:{port}"
     agent_token = create_agent_token(jwt_secret, "plan-executor")
 

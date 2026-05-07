@@ -146,9 +146,13 @@ class FetchScheduler:
             if not force and (now - last < _COOLDOWN_SECS):
                 return None
 
-            from codehome.supervisor.paths import repo_anchor
+            from codehome.service_protocols import ProjectLayout
+            from codehome.state.service_registry import services as _svc_reg
 
-            anchor = await asyncio.to_thread(repo_anchor, repo_name)
+            layout = _svc_reg.get_typed("supervisor.layout", ProjectLayout)
+            if layout is None:
+                return None
+            anchor = await asyncio.to_thread(layout.repo_anchor, repo_name)
             if not await asyncio.to_thread(_path_exists, anchor):
                 return None
 

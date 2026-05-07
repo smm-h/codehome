@@ -27,10 +27,15 @@ def _resolve_worktree(qualified: str) -> tuple[str, str, Path]:
 
     Raises FileNotFoundError if the worktree directory doesn't exist.
     """
-    from codehome.supervisor.paths import worktree_path as _wtp
+    from codehome.service_protocols import ProjectLayout
+    from codehome.state.service_registry import services
+
+    layout = services.get_typed("supervisor.layout", ProjectLayout)
+    if layout is None:
+        raise FileNotFoundError("ProjectLayout not registered (supervisor plugin not loaded)")
 
     repo, branch = qualified.split(":", 1)
-    wt = _wtp(repo, branch)
+    wt = layout.worktree_path(repo, branch)
     if not wt.is_dir():
         raise FileNotFoundError(f"Worktree not found: {qualified}")
     return repo, branch, wt

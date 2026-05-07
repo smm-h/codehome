@@ -11,22 +11,32 @@ import shutil
 from typing import TYPE_CHECKING, Any
 
 
+from codehome.service_protocols import ProjectLayout
+
 if TYPE_CHECKING:
     from pathlib import Path
 
 
+def _get_layout() -> ProjectLayout:
+    """Resolve the ProjectLayout service, raising if unavailable."""
+    from codehome.state.service_registry import services
+
+    layout = services.get_typed("supervisor.layout", ProjectLayout)
+    if layout is None:
+        raise RuntimeError("ProjectLayout not registered (supervisor plugin not loaded)")
+    return layout
+
+
 def _services_json_path(repo: str, branch: str) -> Path:
     """Path to the branch-level service config."""
-    from codehome.supervisor.paths import branch_dir
-
-    return branch_dir(repo, branch) / ".services.json"
+    layout = _get_layout()
+    return layout.branch_dir(repo, branch) / ".services.json"
 
 
 def _template_path(repo: str) -> Path:
     """Path to the repo-level service template."""
-    from codehome.supervisor.paths import repo_dir
-
-    return repo_dir(repo) / ".services.template.json"
+    layout = _get_layout()
+    return layout.repo_dir(repo) / ".services.template.json"
 
 
 def load_services_config(repo: str, branch: str) -> list[dict[str, Any]] | None:
@@ -61,9 +71,8 @@ def resolve_placeholders(
 
     Returns a new list of dicts with resolved values and computed keys.
     """
-    from codehome.supervisor.paths import worktree_path
-
-    wt = str(worktree_path(repo, branch))
+    layout = _get_layout()
+    wt = str(layout.worktree_path(repo, branch))
     resolved = []
     for svc in service_defs:
         entry = _deep_resolve(svc, qualified, wt)

@@ -287,9 +287,12 @@ app.include_router(features_router.router)
 
 # Feature-gated public routers: disable via .supervisor/features.json
 if features.enabled("terminal"):
-    from codehome.supervisor.routes import public_router as _terminal_public_router  # noqa: E402
+    try:
+        from codehome.supervisor.routes import public_router as _terminal_public_router  # noqa: E402
 
-    app.include_router(_terminal_public_router)
+        app.include_router(_terminal_public_router)
+    except (ImportError, AttributeError):
+        pass  # supervisor plugin not loaded; terminal route unavailable
 if features.enabled("conductor"):
     app.include_router(agents.public_router)
 

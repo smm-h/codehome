@@ -160,10 +160,15 @@ async def discover_running() -> None:
         # Supabase is running -- re-register with full connection metadata.
         # Resolve worktree path from branch name so stop helpers can find it.
         key = f"{branch}/supabase"
-        from codehome.supervisor.paths import worktree_path
+        from codehome.service_protocols import ProjectLayout
+        from codehome.state.service_registry import services as _svc_reg
 
+        _layout = _svc_reg.get_typed("supervisor.layout", ProjectLayout)
+        if _layout is None:
+            ports.release_supabase_slot(branch)
+            continue
         repo, br = branch.split(":", 1)
-        wt_path = worktree_path(repo, br)
+        wt_path = _layout.worktree_path(repo, br)
         wt = str(wt_path)
 
         # Best-effort: recover full connection details (anon_key,
