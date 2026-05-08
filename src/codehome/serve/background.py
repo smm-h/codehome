@@ -92,6 +92,10 @@ class BackgroundTaskRegistry:
                 log.exception("task_stop_failed", name=name)
         self._running.clear()
 
+    def get_task(self, name: str) -> BackgroundTask | None:
+        """Return a running task instance by *name*, or ``None`` if not running."""
+        return self._running.get(name)
+
     def list_tasks(self) -> list[dict[str, object]]:
         """List registered tasks with their running status."""
         result: list[dict[str, object]] = []

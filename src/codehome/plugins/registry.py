@@ -48,6 +48,7 @@ class LoadedPlugin:
     manifest: PluginManifest
     cli_registrar: Any = None
     router: Any = None
+    public_router: Any = None
 
 
 # -- Module-level state (private) -------------------------------------------

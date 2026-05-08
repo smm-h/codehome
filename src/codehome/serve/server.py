@@ -103,12 +103,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Background git fetch scheduler: registered as a background task by the
     # supervisor plugin (started via background_tasks.start_all() below).
-    # Expose on app.state for the manual-trigger API endpoint.
-    try:
-        from codehome.supervisor.ops.fetch_scheduler import fetch_scheduler
-        app.state.fetch_scheduler = fetch_scheduler
-    except ImportError:
-        pass  # supervisor plugin not loaded
+    # Exposed on app.state after start_all() for the manual-trigger API endpoint.
 
     # Slack notification dispatcher: registered as a background task by the
     # supervisor plugin (started via background_tasks.start_all() below).
@@ -150,6 +145,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Start plugin-contributed background tasks (respects feature gates).
     background_tasks.start_all()
+
+    # Expose the fetch_scheduler (if running) on app.state for the
+    # manual-trigger API endpoint -- resolved by name, no plugin import.
+    _fs = background_tasks.get_task("fetch_scheduler")
+    if _fs is not None:
+        app.state.fetch_scheduler = _fs
 
     # Dev mode: spawn Vite dev server for HMR and drain its output.
     vite_proc = None
@@ -280,13 +281,6 @@ app.include_router(services_router.public_router)
 app.include_router(features_router.router)
 
 # Feature-gated public routers: disable via .supervisor/features.json
-if features.enabled("terminal"):
-    try:
-        from codehome.supervisor.routes import public_router as _terminal_public_router  # noqa: E402
-
-        app.include_router(_terminal_public_router)
-    except (ImportError, AttributeError):
-        pass  # supervisor plugin not loaded; terminal route unavailable
 if features.enabled("conductor"):
     app.include_router(agents.public_router)
 
@@ -337,6 +331,16 @@ if features.enabled("plugins"):
                     _plugin.router,
                     prefix=f"/api/p/{_plugin.name}",
                     dependencies=[Depends(get_current_user)],
+                )
+        # Public routers (e.g. WebSocket endpoints with query-param auth)
+        # are mounted without the auth dependency.
+        if _plugin.public_router is not None:
+            if _plugin.manifest.root_routes:
+                app.include_router(_plugin.public_router)
+            else:
+                app.include_router(
+                    _plugin.public_router,
+                    prefix=f"/api/p/{_plugin.name}",
                 )
 
 # -- SPA static file fallback / Vite dev proxy -----------------------------

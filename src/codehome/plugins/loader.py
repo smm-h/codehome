@@ -218,12 +218,14 @@ def load_all_plugins(root: Path | None = None) -> tuple[int, list[str]]:
                 errors.append(f"plugin '{name}': declares commands but handlers.py not found")
 
         # routes.py -- FastAPI APIRouter for dashboard integration.
+        public_router = None
         if manifest.dashboard is not None:
             routes_path = plugin_dir / "routes.py"
             if routes_path.is_file():
                 mod = _import_module_from_file(name, routes_path, persist=True)
                 if mod is not None:
                     router = getattr(mod, "router", None)
+                    public_router = getattr(mod, "public_router", None)
                     if router is None:
                         errors.append(f"plugin '{name}': routes.py has no 'router' attribute")
                 else:
@@ -283,6 +285,7 @@ def load_all_plugins(root: Path | None = None) -> tuple[int, list[str]]:
             manifest=manifest,
             cli_registrar=cli_registrar,
             router=router,
+            public_router=public_router,
         )
         registry.register(loaded_plugin)
 
