@@ -25,13 +25,30 @@ def _compute_root() -> Path:
 
     Priority:
     1. CODEHOME_ROOT env var (explicit override)
-    2. __file__-based computation (development/editable install mode)
+    2. Walk up from CWD looking for .codehome/repos.toml (project marker)
+    3. __file__-based computation (development/editable install mode)
+
+    Step 2 handles the repo-split scenario: the codehome package lives
+    in a separate repo (~/Projects/codehome/) while the project root
+    with repos.toml and plugins/ lives elsewhere (e.g. ~/Work/super/).
+    Walking from CWD mirrors how git discovers .git/.
     """
     env_root = os.environ.get("CODEHOME_ROOT")
     if env_root:
         p = Path(env_root).resolve()
         if p.is_dir():
             return p
+
+    # Walk up from CWD looking for the project-local state directory
+    # containing repos.toml -- the definitive project marker.
+    try:
+        cwd = Path.cwd().resolve()
+        for parent in [cwd, *cwd.parents]:
+            if (parent / ".codehome" / "repos.toml").is_file():
+                return parent
+    except OSError:
+        pass
+
     return Path(__file__).resolve().parent.parent.parent
 
 
