@@ -19,7 +19,7 @@ from typing import Any
 
 from codehome.config import load_server_config, server_config_exists
 from codehome.http_client import _resolve_token_file
-from codehome.paths import ROOT, SUPERVISOR_DIR, resolve_global
+from codehome.paths import ROOT, resolve_global
 from codehome.serve import DEFAULT_PORT, PORT_FILE, read_server_info, read_server_info_raw, read_server_url
 from codehome.utils import die, green, red, yellow
 
@@ -208,14 +208,14 @@ def _maybe_rebuild() -> None:
 def _ensure_tls_certs() -> tuple[Path, Path]:
     """Generate localhost TLS certs via mkcert.
 
-    Certs are stored in ~/.codehome/certs/ (or .supervisor/certs/ for legacy
+    Certs are stored in ~/.codehome/certs/ (or .codehome/certs/ for legacy
     installs) and reused across restarts. Requires mkcert to be installed.
     """
     import shutil
 
     from codehome.paths import codehome_home
 
-    # Dual-read: resolve_global checks ~/.codehome/ first, falls back to .supervisor/.
+    # Dual-read: resolve_global checks ~/.codehome/ first, falls back to .codehome/.
     cert_dir = resolve_global("certs")
     cert = cert_dir / "localhost.pem"
     key = cert_dir / "localhost-key.pem"

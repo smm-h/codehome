@@ -38,9 +38,11 @@ def _compute_root() -> Path:
 ROOT = _compute_root()
 
 # Shared infrastructure (not per-repo).
-SUPERVISOR_DIR = ROOT / ".supervisor"
-EVENTS_DIR = SUPERVISOR_DIR / "events"
-CACHE_DIR = SUPERVISOR_DIR / "cache"
+STATE_DIR = ROOT / ".codehome"
+# Backward-compat alias (plugins may still import the old name).
+SUPERVISOR_DIR = STATE_DIR
+EVENTS_DIR = STATE_DIR / "events"
+CACHE_DIR = STATE_DIR / "cache"
 LINEAR_CACHE = CACHE_DIR / "linear.json"
 WORKFLOWS_CACHE = CACHE_DIR / "workflows.json"
 ENV_FILE = ROOT / ".env"
@@ -49,19 +51,19 @@ IGNORABLE_FILE = ROOT / "scripts" / "ignorable-worktree-changes"
 
 
 def resolve_global(rel: str) -> Path:
-    """Resolve a global state file: prefer ~/.codehome/, fall back to .supervisor/.
+    """Resolve a global state file: prefer ~/.codehome/, fall back to .codehome/.
 
-    This enables gradual migration from the legacy .supervisor/ layout
-    to the new ~/.codehome/ home directory.
+    This enables gradual migration from the project-local .codehome/ layout
+    to the user-global ~/.codehome/ home directory.
     """
     new = codehome_home() / rel
     if new.exists():
         return new
-    return SUPERVISOR_DIR / rel
+    return STATE_DIR / rel
 
 
 # Operational state files -- resolved via resolve_global() so they are
-# found in either ~/.codehome/ (new layout) or .supervisor/ (legacy).
+# found in either ~/.codehome/ (new layout) or .codehome/ (project-local).
 SUPPRESS_CHECKS = resolve_global("suppress-checks.txt")
 STAGING_MERGE_STATE = resolve_global("staging-merge.json")
 REBASE_STATE = resolve_global("rebase-state.json")

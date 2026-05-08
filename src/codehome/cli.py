@@ -107,8 +107,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_init.add_argument("--remote", required=True, help="git remote URL to clone")
     p_init.add_argument("--base", default="production", help="base branch name (default: production)")
 
-    # superv migrate: copy state from .supervisor/ to ~/.codehome/.
-    p_migrate = sub.add_parser("migrate", help="migrate state from .supervisor/ to ~/.codehome/")
+    # superv migrate: copy state from .codehome/ to ~/.codehome/.
+    p_migrate = sub.add_parser("migrate", help="migrate state from .codehome/ to ~/.codehome/")
     p_migrate.set_defaults(_cmd=("codehome.commands.migrate_cmd", "cmd_migrate"))
 
     # -- auth group ------------------------------------------------------------

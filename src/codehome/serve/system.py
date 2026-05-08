@@ -32,11 +32,11 @@ def check_docker() -> bool:
 
 
 def codehome_disk_usage() -> int:
-    """Return total bytes used by ~/.codehome/ and .supervisor/ directories."""
-    from codehome.paths import SUPERVISOR_DIR, codehome_home
+    """Return total bytes used by ~/.codehome/ and .codehome/ directories."""
+    from codehome.paths import STATE_DIR, codehome_home
 
     total = 0
-    for d in (codehome_home(), SUPERVISOR_DIR):
+    for d in (codehome_home(), STATE_DIR):
         if not d.is_dir():
             continue
         for f in d.rglob("*"):
@@ -70,7 +70,7 @@ async def build_health_status() -> dict[str, Any]:
     issues: list[str] = []
 
     if disk_bytes > 500 * 1024 * 1024:
-        issues.append(f".supervisor/ disk usage is {disk_bytes // (1024 * 1024)} MB")
+        issues.append(f".codehome/ disk usage is {disk_bytes // (1024 * 1024)} MB")
     if issues:
         status = "degraded"
 
@@ -236,7 +236,7 @@ async def shutdown_all_services() -> int:
 
 
 def find_logo() -> Path | None:
-    """Return the first logo.* file found (prefers ~/.codehome/, falls back to .supervisor/)."""
+    """Return the first logo.* file found (prefers ~/.codehome/, falls back to .codehome/)."""
     from codehome.paths import resolve_global
 
     for ext in (".png", ".jpg", ".svg"):
@@ -247,11 +247,11 @@ def find_logo() -> Path | None:
 
 
 def remove_logo() -> bool:
-    """Delete all logo files from both ~/.codehome/ and .supervisor/."""
-    from codehome.paths import SUPERVISOR_DIR, codehome_home
+    """Delete all logo files from both ~/.codehome/ and .codehome/."""
+    from codehome.paths import STATE_DIR, codehome_home
 
     removed = False
-    for d in (codehome_home(), SUPERVISOR_DIR):
+    for d in (codehome_home(), STATE_DIR):
         for ext in (".png", ".jpg", ".svg"):
             p = d / f"logo{ext}"
             if p.is_file():

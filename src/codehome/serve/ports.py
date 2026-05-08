@@ -8,7 +8,7 @@ import socket
 from codehome.paths import resolve_global, codehome_home
 from codehome.serve.file_lock import write_json_locked
 
-# Read: dual-path fallback (new ~/.codehome/ then legacy .supervisor/).
+# Read: dual-path fallback (new ~/.codehome/ then project-local .codehome/).
 # Write: always to the canonical new location (~/.codehome/).
 _STATE_FILE_READ = resolve_global("serve-ports.json")
 _STATE_FILE_WRITE = codehome_home() / "serve-ports.json"

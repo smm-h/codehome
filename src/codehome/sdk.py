@@ -79,6 +79,7 @@ _LAZY_IMPORTS: dict[str, tuple[str, str | None]] = {
     "PROTECTED_BRANCHES": ("codehome.paths", "PROTECTED_BRANCHES"),
     "ROOT": ("codehome.paths", "ROOT"),
     "STAGING_MERGE_STATE": ("codehome.paths", "STAGING_MERGE_STATE"),
+    "STATE_DIR": ("codehome.paths", "STATE_DIR"),
     "SUPERVISOR_DIR": ("codehome.paths", "SUPERVISOR_DIR"),
     "resolve_global": ("codehome.paths", "resolve_global"),
     "codehome_home": ("codehome.paths", "codehome_home"),
@@ -206,10 +207,10 @@ def get_plugin_cache_dir(plugin_name: str, key: str) -> Path:
     """Return the cache directory for a plugin, creating it if needed.
 
     Checks the new location (~/.codehome/<plugin>/<key>) first,
-    falls back to the legacy location (.supervisor/<plugin>/<key>).
+    falls back to the project-local location (.codehome/<plugin>/<key>).
     If neither exists, returns the new location.
 
-    References to codehome_home and SUPERVISOR_DIR resolve lazily via
+    References to codehome_home and STATE_DIR resolve lazily via
     module-level __getattr__ at call time.
     """
     from pathlib import Path as _Path
@@ -217,7 +218,7 @@ def get_plugin_cache_dir(plugin_name: str, key: str) -> Path:
     new = codehome_home() / plugin_name / key
     if new.exists():
         return new
-    legacy = SUPERVISOR_DIR / plugin_name / key
+    legacy = STATE_DIR / plugin_name / key
     if legacy.exists():
         return legacy
     return new
@@ -234,6 +235,7 @@ __all__ = [
     "PROTECTED_BRANCHES",
     "ROOT",
     "STAGING_MERGE_STATE",
+    "STATE_DIR",
     "SUPERVISOR_DIR",
     "TOKEN_FILE",
     "USE_COLOR",

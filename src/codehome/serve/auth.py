@@ -16,14 +16,14 @@ USERS_FILE = resolve_global("users.json")
 
 
 def load_users() -> list[dict[str, str]]:
-    """Read all users from .supervisor/users.json."""
+    """Read all users from users.json (resolved via resolve_global)."""
     if not USERS_FILE.is_file():
         return []
     return json.loads(USERS_FILE.read_text())  # type: ignore[no-any-return]
 
 
 def save_users(users: list[dict[str, str]]) -> None:
-    """Write users list back to .supervisor/users.json."""
+    """Write users list back to users.json (resolved via resolve_global)."""
     USERS_FILE.write_text(json.dumps(users, indent=2) + "\n")
 
 

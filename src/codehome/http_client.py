@@ -1,7 +1,7 @@
 """HTTP client for CLI-to-server communication.
 
 Thin wrapper around urllib that handles authentication (JWT from ~/.codehome/token,
-with fallback to ~/.supervisor/token), server discovery (via serve.read_server_url),
+with legacy fallback to ~/.supervisor/token), server discovery (via serve.read_server_url),
 and error formatting. All CLI commands that need to talk to the server should use
 get/post/put/patch/delete from this module instead of building their own urllib calls.
 """

@@ -8,7 +8,7 @@ import urllib.error
 import urllib.request
 from typing import TYPE_CHECKING
 
-from codehome.paths import SUPERVISOR_DIR, resolve_global
+from codehome.paths import STATE_DIR, resolve_global
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -22,7 +22,7 @@ DEFAULT_PORT = 9100
 # self-kill.
 PORT_FILE: Path = resolve_global("server.port")
 
-_LEGACY_PORT_FILE: Path = SUPERVISOR_DIR / "dashboard.port"
+_LEGACY_PORT_FILE: Path = STATE_DIR / "dashboard.port"
 
 
 def _migrate_port_file() -> None:

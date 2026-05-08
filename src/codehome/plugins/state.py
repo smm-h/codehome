@@ -1,6 +1,6 @@
 """Plugin state persistence: track enabled/disabled status globally.
 
-State is stored in ``.supervisor/plugins-state.json`` (under the super/
+State is stored in ``.codehome/plugins-state.json`` (under the super/
 project root) and records which plugins are known, their metadata, and
 whether each is enabled or disabled.  The state file is the authority
 for enable/disable toggles; the on-disk plugin directories are the
@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 
 def _state_path(root: Path) -> Path:
     """Return the path to the global plugins state file."""
-    return root / ".supervisor" / "plugins-state.json"
+    return root / ".codehome" / "plugins-state.json"
 
 
 def load_state(root: Path) -> dict[str, Any]:

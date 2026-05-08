@@ -3,13 +3,13 @@
 from enum import StrEnum
 from pathlib import Path
 
-from codehome.paths import SUPERVISOR_DIR, codehome_home
+from codehome.paths import STATE_DIR, codehome_home
 
 
 class Scope(StrEnum):
     GLOBAL = "global"  # ~/.codehome/plugin-data/<plugin>/
-    REPO = "repo"  # <repo_dir>/.supervisor/plugins/<plugin>/
-    BRANCH = "branch"  # <repo_dir>/branches/<branch>/.supervisor/plugins/<plugin>/
+    REPO = "repo"  # <repo_dir>/.codehome/plugins/<plugin>/
+    BRANCH = "branch"  # <repo_dir>/branches/<branch>/.codehome/plugins/<plugin>/
     SECRET = "secret"  # ~/.codehome/credentials/<plugin>/
 
 
@@ -34,30 +34,30 @@ def resolve_path(
     """Resolve the storage directory for a plugin at a given scope.
 
     GLOBAL and SECRET scopes prefer ~/.codehome/ (new layout), falling back
-    to .supervisor/ (legacy) when the new directory does not exist yet.
+    to .codehome/ (project-local) when the new directory does not exist yet.
     """
     match scope:
         case Scope.GLOBAL:
             new = codehome_home() / "plugin-data" / plugin
             if new.exists():
                 return new
-            legacy = SUPERVISOR_DIR / "plugins" / plugin
+            legacy = STATE_DIR / "plugins" / plugin
             if legacy.exists():
                 return legacy
             return new  # default to new location
         case Scope.REPO:
             if not repo:
                 raise ValueError("repo required for REPO scope")
-            return _require_layout().repo_dir(repo) / ".supervisor" / "plugins" / plugin
+            return _require_layout().repo_dir(repo) / ".codehome" / "plugins" / plugin
         case Scope.BRANCH:
             if not repo or not branch:
                 raise ValueError("repo and branch required for BRANCH scope")
-            return _require_layout().branch_dir(repo, branch) / ".supervisor" / "plugins" / plugin
+            return _require_layout().branch_dir(repo, branch) / ".codehome" / "plugins" / plugin
         case Scope.SECRET:
             new = codehome_home() / "credentials" / plugin
             if new.exists():
                 return new
-            legacy = SUPERVISOR_DIR / "credentials" / plugin
+            legacy = STATE_DIR / "credentials" / plugin
             if legacy.exists():
                 return legacy
             return new  # default to new location

@@ -46,7 +46,7 @@ async def get_current_user(
     elif request.query_params.get("token"):
         token = request.query_params["token"]
 
-    # Fallback: read CLI token file (~/.codehome/token or ~/.supervisor/token)
+    # Fallback: read CLI token file (~/.codehome/token or legacy ~/.supervisor/token)
     # so that CLI login automatically works in the browser without a separate
     # dashboard login.
     from_token_file = False

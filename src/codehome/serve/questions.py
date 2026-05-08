@@ -1,6 +1,6 @@
 """Question persistence: tracks agent and gate questions as JSON files.
 
-Each question is stored as a JSON file in .supervisor/questions/. This
+Each question is stored as a JSON file in .codehome/questions/. This
 allows the dashboard inbox to fetch pending questions on page load instead
 of relying solely on ephemeral SSE events.
 """

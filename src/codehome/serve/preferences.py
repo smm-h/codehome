@@ -3,10 +3,10 @@
 Two layers:
 
 1. **Namespaced preferences** -- per-user files in
-   `.supervisor/preferences/{username}.json`, keyed by namespace (e.g.
+   `.codehome/preferences/{username}.json`, keyed by namespace (e.g.
    "branch-table").  Used by dashboard components for their own state.
 
-2. **User preferences** -- a single `.supervisor/preferences.json` file,
+2. **User preferences** -- a single `.codehome/preferences.json` file,
    keyed by username, holding flat settings (theme, language, etc.) with
    built-in defaults.
 """

@@ -2,7 +2,7 @@
 
 Each agent session represents one claude -p subprocess dispatched to work
 on a task. Sessions are stored in memory (dict) and persisted as individual
-JSON files in .supervisor/agent-sessions/.
+JSON files in .codehome/agent-sessions/.
 """
 
 import json

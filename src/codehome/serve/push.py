@@ -1,7 +1,7 @@
 """Push notification manager with VAPID key management and per-user subscriptions.
 
-Stores VAPID keys in .supervisor/vapid_keys.json and push subscriptions in
-.supervisor/push_subscriptions.json.  Both files are created on first use.
+Stores VAPID keys in .codehome/vapid_keys.json and push subscriptions in
+.codehome/push_subscriptions.json.  Both files are created on first use.
 """
 
 import asyncio

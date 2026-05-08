@@ -1,7 +1,7 @@
 """Sentry error tracking integration for the FastAPI backend.
 
 Initializes Sentry if a DSN is configured in the server config
-(.supervisor/config.json, key: "sentry_dsn"). If no DSN is present,
+(~/.codehome/config.json, key: "sentry_dsn"). If no DSN is present,
 initialization is silently skipped.
 """
 

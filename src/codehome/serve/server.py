@@ -280,7 +280,7 @@ app.include_router(system.public_router)
 app.include_router(services_router.public_router)
 app.include_router(features_router.router)
 
-# Feature-gated public routers: disable via .supervisor/features.json
+# Feature-gated public routers: disable via features.json
 if features.enabled("conductor"):
     app.include_router(agents.public_router)
 
@@ -305,7 +305,7 @@ _authed_routers: list[Any] = [
     features_router.authed_router,
 ]
 
-# Feature-gated routers: disable via .supervisor/features.json
+# Feature-gated routers: disable via features.json
 if features.enabled("plugins"):
     _authed_routers.append(plugins_router.router)
 if features.enabled("conductor"):

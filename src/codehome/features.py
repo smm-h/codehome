@@ -1,6 +1,6 @@
 """Boolean feature flags with per-machine overrides via features.json.
 
-Reads from ~/.codehome/features.json (preferred) or .supervisor/features.json (fallback).
+Reads from ~/.codehome/features.json (preferred) or .codehome/features.json (fallback).
 Writes always go to ~/.codehome/features.json.
 """
 
@@ -9,7 +9,7 @@ import threading
 
 from codehome.paths import resolve_global, codehome_home
 
-# Dual-read: resolve_global checks ~/.codehome/ first, falls back to .supervisor/.
+# Dual-read: resolve_global checks ~/.codehome/ first, falls back to .codehome/.
 FEATURES_FILE = resolve_global("features.json")
 # Writes always target the new canonical location.
 _FEATURES_WRITE = codehome_home() / "features.json"

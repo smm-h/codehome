@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 
 import bcrypt
 
-from codehome.paths import SUPERVISOR_DIR, codehome_home
+from codehome.paths import codehome_home
 from codehome.utils import die
 
 # Writes go to ~/.codehome/ (new canonical location).
@@ -61,9 +61,9 @@ def _prompt_jwt_secret() -> str:
 
 
 def cmd_setup(args: argparse.Namespace) -> None:
-    """One-time server bootstrap wizard. Creates .supervisor/config.json and users.json."""
+    """One-time server bootstrap wizard. Creates ~/.codehome/config.json and users.json."""
     if CONFIG_FILE.exists():
-        die("Setup already complete. Delete .supervisor/config.json to re-run.")
+        die("Setup already complete. Delete ~/.codehome/config.json to re-run.")
 
     flag_username = getattr(args, "username", None)
     flag_password = getattr(args, "password", None)
@@ -92,7 +92,7 @@ def cmd_setup(args: argparse.Namespace) -> None:
     config = {
         "port": port,
         "jwt_secret": jwt_secret,
-        "data_dir": ".supervisor",
+        "data_dir": ".codehome",
     }
     CONFIG_FILE.write_text(json.dumps(config, indent=2) + "\n")
 

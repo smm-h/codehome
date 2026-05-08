@@ -1,7 +1,7 @@
-"""Migrate state from .supervisor/ to ~/.codehome/.
+"""Migrate state from .codehome/ (or legacy .supervisor/) to ~/.codehome/.
 
-Copies critical configuration files from the legacy project-local
-.supervisor/ directory to the new user-global ~/.codehome/ home.
+Copies critical configuration files from the project-local .codehome/
+directory to the user-global ~/.codehome/ home.
 Also migrates the legacy ~/.supervisor/token file.
 
 Safe to run multiple times -- existing files at the destination are
@@ -12,17 +12,23 @@ import argparse
 import shutil
 from pathlib import Path
 
-from codehome.paths import SUPERVISOR_DIR, codehome_home
+from codehome.paths import ROOT, STATE_DIR, codehome_home
 
 
 def cmd_migrate(args: argparse.Namespace) -> None:
-    """Copy state files from .supervisor/ to ~/.codehome/."""
+    """Copy state files from .codehome/ to ~/.codehome/."""
     home = codehome_home()
     home.mkdir(parents=True, exist_ok=True)
 
-    # Items to migrate from project-local .supervisor/ to ~/.codehome/.
+    # Support both the current .codehome/ and the legacy .supervisor/ as source.
+    legacy_dir = ROOT / ".supervisor"
+    source = STATE_DIR if STATE_DIR.is_dir() else legacy_dir
+
+    source_label = source.name
+
+    # Items to migrate from project-local state dir to ~/.codehome/.
     items: list[tuple[str, str, bool]] = [
-        # (source_rel_to_SUPERVISOR_DIR, dest_rel_to_home, is_directory)
+        # (source_rel, dest_rel_to_home, is_directory)
         # Core config
         ("config.json", "config.json", False),
         ("users.json", "users.json", False),
@@ -52,11 +58,11 @@ def cmd_migrate(args: argparse.Namespace) -> None:
     missing = 0
 
     for src_rel, dst_rel, is_dir in items:
-        src = SUPERVISOR_DIR / src_rel
+        src = source / src_rel
         dst = home / dst_rel
 
         if not src.exists():
-            print(f"  skip  {src_rel}  (not found in .supervisor/)")
+            print(f"  skip  {src_rel}  (not found in {source_label}/)")
             missing += 1
             continue
 

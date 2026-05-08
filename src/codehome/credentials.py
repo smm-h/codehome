@@ -6,7 +6,7 @@ following the same pattern as github_tokens.py.
 
 Storage: ~/.codehome/connections/{username}.json -- a dict mapping
 provider name to encrypted token string. Each user gets their own file.
-Falls back to .supervisor/connections/ for legacy installs.
+Falls back to .codehome/connections/ for legacy installs.
 """
 
 import json
@@ -15,7 +15,7 @@ from pathlib import Path
 
 from cryptography.fernet import InvalidToken
 
-from codehome.paths import SUPERVISOR_DIR, codehome_home
+from codehome.paths import STATE_DIR, codehome_home
 from codehome.serve.github_tokens import _get_fernet
 from codehome.serve.logging_config import get_logger
 
@@ -23,7 +23,7 @@ logger = get_logger(component="connections")
 
 # New location for encrypted connection tokens; legacy fallback below.
 _CONNECTIONS_DIR = codehome_home() / "connections"
-_LEGACY_CONNECTIONS_DIR = SUPERVISOR_DIR / "connections"
+_LEGACY_CONNECTIONS_DIR = STATE_DIR / "connections"
 
 # Guards read-modify-write on per-user files.
 _lock = threading.Lock()

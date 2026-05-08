@@ -47,7 +47,7 @@ _log = logging.getLogger(__name__)
 # inspector's resolver as a last-resort fallback when the server is
 # unreachable (see ``codehome.inspect.resolver``).  Schema matches the
 # HTTP response exactly so the resolver has a single decoder.
-# Read path: resolve_global checks ~/.codehome/ first, falls back to .supervisor/.
+# Read path: resolve_global checks ~/.codehome/ first, falls back to .codehome/.
 # Write path: write_vite_ports_state_from_registry() writes to ~/.codehome/ directly.
 VITE_PORTS_STATE_FILE: Path = resolve_global("vite-ports.json")
 

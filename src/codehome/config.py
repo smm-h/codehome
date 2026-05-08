@@ -1,6 +1,6 @@
 """Server configuration: load config.json for the dev server.
 
-Server config lives at ~/.codehome/config.json (or .supervisor/config.json
+Server config lives at ~/.codehome/config.json (or .codehome/config.json
 in legacy layouts), created by `v auth setup`.
 
 Repo configuration has moved to the core plugin:
@@ -34,7 +34,7 @@ def server_config_exists() -> bool:
 
 
 def load_server_config() -> ServerConfig | None:
-    """Load server config from .supervisor/config.json.
+    """Load server config from ~/.codehome/config.json.
 
     Returns None if the file doesn't exist (caller decides what to do).
     Raises ValueError if the file contains malformed JSON.
