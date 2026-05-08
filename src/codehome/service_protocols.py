@@ -93,16 +93,16 @@ class RevengGaps(Protocol):  # noqa: dead-code
 
 
 # ---------------------------------------------------------------------------
-# supervisor plugin -- project layout
+# core plugin -- project layout
 # ---------------------------------------------------------------------------
 
 
 class ProjectLayout(Protocol):
-    """supervisor.layout -- filesystem path resolution for repos and branches.
+    """core.layout -- filesystem path resolution for repos and branches.
 
     Abstracts the multi-repo worktree directory layout so that core
     modules (e.g. serve/) can resolve paths without importing the
-    supervisor plugin directly.
+    core plugin directly.
     """
 
     @property

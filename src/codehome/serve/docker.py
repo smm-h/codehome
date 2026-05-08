@@ -22,13 +22,13 @@ TIMEOUT_COMPOSE_PS = 30
 TIMEOUT_VOLUME_RM = 30
 
 # Docker compose files live at repos/bag/docker/.
-# Lazy to avoid top-level plugin import (repo_dir is in supervisor plugin).
+# Lazy to avoid top-level plugin import (repo_dir is in core plugin).
 def _docker_dir() -> "Path":
     from codehome.state.service_registry import services
     from codehome.service_protocols import ProjectLayout
-    layout = services.get_typed("supervisor.layout", ProjectLayout)
+    layout = services.get_typed("core.layout", ProjectLayout)
     if layout is None:
-        raise RuntimeError("ProjectLayout not registered (supervisor plugin not loaded)")
+        raise RuntimeError("ProjectLayout not registered (core plugin not loaded)")
     return layout.repo_dir("bag") / "docker"
 
 

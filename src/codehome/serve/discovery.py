@@ -5,11 +5,10 @@ may still hold port allocations from a previous session.  This module
 probes those allocations and either re-registers them or releases stale
 entries.
 
-It also runs a secondary Docker-level scan (``discover_docker``) that
-picks up any Compose containers started outside ``v server`` -- e.g. a
-manual ``docker compose up`` or a ``make`` invocation -- so the DOM
-inspector's resolver can find them.  This scan is read-only: it never
-starts or stops containers, only registers matches in ``ServiceManager``.
+``discover_docker`` (Docker-level scan for externally-started containers)
+has been moved to the core plugin (``codehome.core.ops.discovery``)
+because it depends on ``list_branches``.  A thin re-export wrapper is kept
+here so existing callers continue to work.
 """
 
 from __future__ import annotations
@@ -163,7 +162,7 @@ async def discover_running() -> None:
         from codehome.service_protocols import ProjectLayout
         from codehome.state.service_registry import services as _svc_reg
 
-        _layout = _svc_reg.get_typed("supervisor.layout", ProjectLayout)
+        _layout = _svc_reg.get_typed("core.layout", ProjectLayout)
         if _layout is None:
             ports.release_supabase_slot(branch)
             continue
@@ -266,176 +265,16 @@ async def discover_running() -> None:
 # ---------------------------------------------------------------------------
 # Docker-level discovery (external `docker compose up` detection)
 # ---------------------------------------------------------------------------
+# Moved to core plugin: codehome.core.ops.discovery
+# Re-exported here so existing import paths continue to work.
 
 
 async def discover_docker() -> list[dict[str, object]]:
-    """Find running Compose containers that are not yet in ``ServiceManager``.
+    """Re-export: delegates to ``codehome.core.ops.discovery.discover_docker``.
 
-    Closes the gap where ``docker compose up`` is invoked outside the
-    server (e.g. via ``make up`` or a raw ``docker compose up`` during a
-    debugging session) and the ``v inspect`` resolver can therefore never
-    find the resulting port.
-
-    Strategy: list every running container labeled with a Compose project
-    (read-only), map ``project -> qualified branch`` by inverting
-    ``docker.compose_project_name`` over the branches on disk, look up the
-    matching service definition from that branch's ``.services.json``, and
-    register any service whose key is not already in ``ServiceManager``.
-
-    Returns the list of service dicts that were *newly* registered (same
-    shape as ``ServiceInstance.to_dict()``).  Never starts or stops
-    containers; never writes to the ``PortAllocator`` (it owns its own
-    state machine).  Safe to call repeatedly from startup and from the
-    ``POST /api/services/discover`` endpoint.
+    The implementation lives in the core plugin because it depends on
+    ``codehome.core.ops.branches.list_branches`` to map Docker
+    containers to core-managed branches.
     """
-    from codehome.serve import docker as dk
-    from codehome.supervisor.ops.branches import list_branches
-
-    # 1. List candidate containers.  Offload to a thread -- subprocess I/O.
-    containers = await asyncio.to_thread(dk.docker_inspect_compose_containers)
-    if not containers:
-        return []
-
-    # 2. Build a project-name -> qualified-branch map.  Multiple branches
-    # could in principle collapse to the same Compose project name (colon
-    # vs. dash), so we keep the last write; duplicates here would already
-    # be a misconfiguration.
-    project_to_branch: dict[str, tuple[str, str, str]] = {}
-    branches = await asyncio.to_thread(list_branches)
-    for b in branches:
-        qualified = str(b.get("qualified") or "")
-        repo = str(b.get("repo") or "")
-        name = str(b.get("branch") or "")
-        if not qualified or not repo or not name:
-            continue
-        proj = dk.compose_project_name(qualified)
-        project_to_branch[proj] = (qualified, repo, name)
-
-    # 3. Per-branch template cache so we don't re-read the same JSON for
-    # every container in the same project.
-    template_cache: dict[str, list[dict[str, object]]] = {}
-
-    def _resolved_services_for(qualified: str, repo: str, name: str) -> list[dict[str, object]]:
-        if qualified in template_cache:
-            return template_cache[qualified]
-        raw = load_services_config(repo, name)
-        if raw is None:
-            template_cache[qualified] = []
-            return []
-        resolved = resolve_placeholders(raw, qualified, repo, name)
-        template_cache[qualified] = resolved
-        return resolved
-
-    discovered: list[dict[str, object]] = []
-
-    for c in containers:
-        project = str(c.get("project") or "")
-        compose_service = str(c.get("service") or "")
-        if not project or not compose_service:
-            continue
-
-        matched = project_to_branch.get(project)
-        if not matched:
-            # Container doesn't correspond to any known supervisor branch
-            # (e.g. Supabase CLI's own containers, unrelated dev containers).
-            # Skip -- strict naming-convention match is the spec's guardrail
-            # against false positives.
-            continue
-        qualified, repo, name = matched
-
-        # Find the service definition whose metadata.compose_service matches.
-        # The container name format is `<project>-<compose_service>-<n>`;
-        # the supervisor key is `<qualified>/<key_suffix>`.  The two are
-        # bridged through the template's metadata.compose_service field.
-        resolved_services = await asyncio.to_thread(
-            _resolved_services_for,
-            qualified,
-            repo,
-            name,
-        )
-        def_entry: dict[str, object] | None = None
-        for svc_def in resolved_services:
-            metadata = svc_def.get("metadata") or {}
-            if isinstance(metadata, dict) and metadata.get("compose_service") == compose_service:
-                def_entry = svc_def
-                break
-        if def_entry is None:
-            # The container's compose service isn't described by the branch's
-            # template.  Register nothing -- we have no display name, no
-            # metadata, no stable key_suffix.
-            continue
-
-        key = str(def_entry.get("key") or "")
-        if not key:
-            continue
-        if services.get(key) is not None:
-            # Already known (either from `discover_running` moments ago or
-            # from a previous call to this function).  Don't touch it --
-            # avoid clobbering live state machine metadata.
-            continue
-
-        # Pick the right host port.  Prefer the explicit `internal_port`
-        # metadata when present (compose-native services carry it);
-        # otherwise fall back to 5173 for Vite, or the first mapped port.
-        host_ports = c.get("host_ports") or {}
-        if not isinstance(host_ports, dict):
-            host_ports = {}
-        raw_meta = def_entry.get("metadata") or {}
-        metadata = dict(raw_meta) if isinstance(raw_meta, dict) else {}
-
-        port: int | None = None
-        internal_port = metadata.get("internal_port")
-        try:
-            internal_port_int = int(internal_port) if internal_port is not None else None
-        except (TypeError, ValueError):
-            internal_port_int = None
-        if internal_port_int is not None and internal_port_int in host_ports:
-            port = int(host_ports[internal_port_int])
-        elif compose_service.startswith("vite") and 5173 in host_ports:
-            port = int(host_ports[5173])
-        elif host_ports:
-            # Deterministic fallback: pick the smallest container port
-            # that has a host binding.  Better than relying on dict order.
-            first = sorted(host_ports.keys())[0]
-            port = int(host_ports[first])
-
-        service_type = str(def_entry.get("service_type") or "compose")
-        display_name = str(def_entry.get("display_name") or compose_service.title())
-        depends_on = def_entry.get("depends_on") or []
-        if not isinstance(depends_on, list):
-            depends_on = []
-
-        instance = ServiceInstance(
-            key=key,
-            service_type=service_type,
-            branch=qualified,
-            display_name=display_name,
-            depends_on=list(depends_on),
-            state=State.STOPPED,  # Transitioned to RUNNING below.
-            metadata=metadata,
-        )
-        instance.port = port
-        instance.state = State.RUNNING
-        instance.started_at = time.time()
-        try:
-            services.register(instance)
-        except ValueError:
-            # Race: registered concurrently between our `services.get` check
-            # above and now.  Treat as already-known; skip.
-            continue
-
-        svc_dict = instance.to_dict()
-        discovered.append(svc_dict)
-        _log.info(
-            "docker discovery registered %s (container=%s port=%s)",
-            key,
-            c.get("name"),
-            port,
-        )
-
-    # Broadcast so SSE subscribers (dashboard UI, test harness) see the
-    # newly-appeared services the same way they see server-launched ones.
-    for svc_dict in discovered:
-        await fire(Event(name="service.state", payload=svc_dict))
-
-    return discovered
+    from codehome.core.ops.discovery import discover_docker as _impl
+    return await _impl()

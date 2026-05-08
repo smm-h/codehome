@@ -3,8 +3,8 @@
 Server config lives at ~/.codehome/config.json (or .supervisor/config.json
 in legacy layouts), created by `v auth setup`.
 
-Repo configuration has moved to the supervisor plugin:
-  codehome.supervisor.repo_config
+Repo configuration has moved to the core plugin:
+  codehome.core.repo_config
 """
 
 import json

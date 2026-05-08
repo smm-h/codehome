@@ -21,9 +21,9 @@ def _get_layout() -> ProjectLayout:
     """Resolve the ProjectLayout service, raising if unavailable."""
     from codehome.state.service_registry import services
 
-    layout = services.get_typed("supervisor.layout", ProjectLayout)
+    layout = services.get_typed("core.layout", ProjectLayout)
     if layout is None:
-        raise RuntimeError("ProjectLayout not registered (supervisor plugin not loaded)")
+        raise RuntimeError("ProjectLayout not registered (core plugin not loaded)")
     return layout
 
 

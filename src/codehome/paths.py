@@ -1,7 +1,7 @@
 """Core path constants and helpers for the codehome CLI.
 
 This module contains only home/root/global-state paths.
-Repo and branch path helpers live in codehome.supervisor.paths.
+Repo and branch path helpers live in codehome.core.paths.
 """
 
 import os

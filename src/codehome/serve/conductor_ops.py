@@ -46,9 +46,9 @@ def _get_layout() -> Any:
     from codehome.service_protocols import ProjectLayout
     from codehome.state.service_registry import services
 
-    layout = services.get_typed("supervisor.layout", ProjectLayout)
+    layout = services.get_typed("core.layout", ProjectLayout)
     if layout is None:
-        raise ValueError("ProjectLayout not registered (supervisor plugin not loaded)")
+        raise ValueError("ProjectLayout not registered (core plugin not loaded)")
     return layout
 
 

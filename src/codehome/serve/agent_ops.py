@@ -30,9 +30,9 @@ def _resolve_worktree(qualified: str) -> tuple[str, str, Path]:
     from codehome.service_protocols import ProjectLayout
     from codehome.state.service_registry import services
 
-    layout = services.get_typed("supervisor.layout", ProjectLayout)
+    layout = services.get_typed("core.layout", ProjectLayout)
     if layout is None:
-        raise FileNotFoundError("ProjectLayout not registered (supervisor plugin not loaded)")
+        raise FileNotFoundError("ProjectLayout not registered (core plugin not loaded)")
 
     repo, branch = qualified.split(":", 1)
     wt = layout.worktree_path(repo, branch)

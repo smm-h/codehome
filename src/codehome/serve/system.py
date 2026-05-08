@@ -1,6 +1,6 @@
 """Generic server operations: health check, diagnostics, branding, metrics.
 
-Extracted from the supervisor plugin's system_ops.py so core server
+Extracted from the core plugin's system_ops.py so core server
 endpoints (health, logo, diagnostics) work without any plugin installed.
 Functions here have no FastAPI dependencies and no plugin imports.
 """

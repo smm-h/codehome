@@ -102,11 +102,11 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     update_checker.start()
 
     # Background git fetch scheduler: registered as a background task by the
-    # supervisor plugin (started via background_tasks.start_all() below).
+    # core plugin (started via background_tasks.start_all() below).
     # Exposed on app.state after start_all() for the manual-trigger API endpoint.
 
     # Slack notification dispatcher: registered as a background task by the
-    # supervisor plugin (started via background_tasks.start_all() below).
+    # core plugin (started via background_tasks.start_all() below).
 
     # SQLite-backed error log for frontend diagnostics and internal errors.
     from codehome.serve.error_log import ErrorLog
@@ -298,7 +298,7 @@ if features.enabled("push"):
     app.include_router(_push_public)
 
 # Authenticated routers (all endpoints require valid JWT).
-# NOTE: branches, git, system (authed), and matrix routers moved to supervisor plugin.
+# NOTE: branches, git, system (authed), and matrix routers moved to core plugin.
 _authed_routers: list[Any] = [
     auth.router,
     services_router.router,

@@ -1,6 +1,6 @@
 """System public endpoints (no auth): health, diagnostics intake, branding logo, server info.
 
-The authenticated system endpoints have moved to the supervisor plugin.
+The authenticated system endpoints have moved to the core plugin.
 This stub retains only the public_router that server.py mounts without auth.
 """
 
