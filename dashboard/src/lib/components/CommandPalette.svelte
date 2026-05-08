@@ -11,7 +11,6 @@
 	import Button from '$lib/components/Button.svelte';
 	import { goto, page } from '$lib/router/router.svelte.js';
 	import { routeTable } from '$lib/router/routes.js';
-	import type { ServiceData } from '$lib/components/ServiceCard.svelte';
 
 	interface Props {
 		open: boolean;
@@ -30,9 +29,6 @@
 	let branchNames = $state<string[]>([]);
 	let branchesFetched = false;
 
-	let serviceNames = $state<{ key: string; name: string; branch: string }[]>([]);
-	let servicesFetched = false;
-
 	interface DocEntry { name: string; filename: string }
 	let docNames = $state<DocEntry[]>([]);
 	let docsFetched = false;
@@ -43,17 +39,6 @@
 			const rows: { qualified: string }[] = await api.get('/api/branches/table');
 			branchNames = rows.map((r) => r.qualified);
 			branchesFetched = true;
-		} catch (e) {
-			reportError(e, { silent: true, category: 'command-palette' });
-		}
-	}
-
-	async function fetchServices() {
-		if (servicesFetched) return;
-		try {
-			const svcs: ServiceData[] = await api.get('/api/services');
-			serviceNames = svcs.map((s) => ({ key: s.key, name: s.name, branch: s.branch }));
-			servicesFetched = true;
 		} catch (e) {
 			reportError(e, { silent: true, category: 'command-palette' });
 		}
@@ -116,10 +101,6 @@
 		}),
 	);
 
-	const serviceResults = $derived(
-		serviceNames.filter((s) => fuzzyMatch(s.name, query) || fuzzyMatch(s.key, query)),
-	);
-
 	const docResults = $derived(
 		docNames.filter((d) => fuzzyMatch(d.name, query)),
 	);
@@ -132,7 +113,6 @@
 		| { type: 'action'; action: PaletteAction }
 		| { type: 'branch'; qualified: string }
 		| { type: 'tab'; tab: Tab }
-		| { type: 'service'; key: string; name: string; branch: string }
 		| { type: 'doc'; name: string }
 		| { type: 'page'; path: string; label: string };
 
@@ -147,7 +127,6 @@
 		for (const a of actionResults) items.push({ type: 'action', action: a });
 		for (const b of branchResults) items.push({ type: 'branch', qualified: b });
 		for (const t of tabResults) items.push({ type: 'tab', tab: t });
-		for (const s of serviceResults) items.push({ type: 'service', key: s.key, name: s.name, branch: s.branch });
 		for (const d of docResults) items.push({ type: 'doc', name: d.name });
 		for (const p of pageResults) items.push({ type: 'page', path: p.path, label: p.label });
 		return items;
@@ -167,10 +146,6 @@
 		if (tabResults.length > 0) {
 			s.push({ labelKey: 'cmd.tabs', startIndex: idx, count: tabResults.length });
 			idx += tabResults.length;
-		}
-		if (serviceResults.length > 0) {
-			s.push({ labelKey: 'cmd.services', startIndex: idx, count: serviceResults.length });
-			idx += serviceResults.length;
 		}
 		if (docResults.length > 0) {
 			s.push({ labelKey: 'cmd.docs', startIndex: idx, count: docResults.length });
@@ -195,10 +170,8 @@
 			query = '';
 			selectedIndex = 0;
 			branchesFetched = false;
-			servicesFetched = false;
 			docsFetched = false;
 			fetchBranches();
-			fetchServices();
 			fetchDocs();
 			requestAnimationFrame(() => inputEl?.focus());
 		} else if (previouslyFocused) {
@@ -228,14 +201,6 @@
 					route = `/${tab.key}`;
 				}
 				goto(route);
-				onClose();
-				break;
-			}
-			case 'service': {
-				const [repo, branch] = item.branch.split(':', 2);
-				if (repo && branch) {
-					goto(`/branch/${repo}/${branch}/services`);
-				}
 				onClose();
 				break;
 			}
@@ -317,8 +282,6 @@
 				return item.qualified;
 			case 'tab':
 				return i18n.t(item.tab.i18n);
-			case 'service':
-				return item.name;
 			case 'doc':
 				return item.name;
 			case 'page':
@@ -334,8 +297,6 @@
 				return 'git-branch';
 			case 'tab':
 				return item.tab.icon;
-			case 'service':
-				return 'server';
 			case 'doc':
 				return 'book-open';
 			case 'page':
@@ -351,8 +312,6 @@
 				return i18n.t('cmd.branches');
 			case 'tab':
 				return i18n.t('cmd.tabs');
-			case 'service':
-				return i18n.t('cmd.services');
 			case 'doc':
 				return i18n.t('cmd.docs');
 			case 'page':
