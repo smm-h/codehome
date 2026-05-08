@@ -1,20 +1,23 @@
 """Re-export stub: git_cmd command moved to plugins/core/commands/git_cmd.py.
 
-This module exists solely so that serve/ code can continue importing
-rebase internals from codehome.commands.git_cmd.
+Uses lazy __getattr__ so the core plugin directory is resolved on first
+access, not at import time.
 """
 
-from codehome.dynamic_import import import_module_from_path
-from codehome.paths import ROOT
-
-_mod = import_module_from_path(
-    "_core_cmd_git_cmd",
-    ROOT / "plugins" / "core" / "commands" / "git_cmd.py",
+_EXPORTS = (
+    "_conflict_file_list",
+    "_detect_skip_worktree",
+    "_is_rebase_in_progress",
+    "_remigrate",
+    "_restore_skip_worktree",
+    "_save_rebase_state",
 )
 
-_conflict_file_list = _mod._conflict_file_list
-_detect_skip_worktree = _mod._detect_skip_worktree
-_is_rebase_in_progress = _mod._is_rebase_in_progress
-_remigrate = _mod._remigrate
-_restore_skip_worktree = _mod._restore_skip_worktree
-_save_rebase_state = _mod._save_rebase_state
+
+def __getattr__(name: str):
+    if name in _EXPORTS:
+        from codehome.commands import _load_core_command
+
+        return getattr(_load_core_command("_core_cmd_git_cmd", "git_cmd.py"), name)
+    msg = f"module {__name__!r} has no attribute {name!r}"
+    raise AttributeError(msg)
