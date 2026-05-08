@@ -1,0 +1,253 @@
+/* ── Fallback custom properties (before applyTheme runs) ── */
+:root {
+	--bg: #0f1117;
+	--bg-surface: #1a1d27;
+	--bg-hover: #252836;
+	--text: #e1e4ea;
+	--text-muted: #8b8fa3;
+	--text-dim: #5a5d6e;
+	--border: #2a2d3a;
+	--accent: #6366f1;
+	--accent-hover: #818cf8;
+	--accent-muted: rgba(99, 102, 241, 0.15);
+	--accent-text: #ffffff;
+	--success: #22c55e;
+	--warning: #f59e0b;
+	--danger: #ef4444;
+
+	--error: #ef4444;
+	--primary: #6366f1;
+	--primary-hover: #818cf8;
+	--text-primary: #e1e4ea;
+	--text-secondary: #8b8fa3;
+	--text-error: #ef4444;
+	--accent-subtle: rgba(99, 102, 241, 0.08);
+	--border-hover: #3a3d4a;
+
+	--radius: 6px;
+	--font: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+	--font-mono: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+}
+
+/* ── Reset & base ── */
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+body {
+	margin: 0;
+	background: var(--bg);
+	color: var(--text);
+	font-family: var(--font);
+	font-size: 14px;
+	line-height: 1.5;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar {
+	width: 6px;
+	height: 6px;
+}
+
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+	background: var(--border);
+	border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+	background: var(--text-dim);
+}
+
+/* Firefox */
+* {
+	scrollbar-width: thin;
+	scrollbar-color: var(--border) transparent;
+}
+
+/* ── Focus ── */
+:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+/* ── Button reset ── */
+button {
+	border: none;
+	background: none;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+	padding: 0;
+}
+
+button:disabled {
+	cursor: not-allowed;
+	opacity: 0.5;
+}
+
+/* ── Input styling ── */
+input,
+textarea,
+select {
+	font: inherit;
+	color: var(--text);
+	background: var(--bg);
+	border: 1px solid var(--border);
+	border-radius: var(--radius);
+	padding: 6px 10px;
+}
+
+input::placeholder,
+textarea::placeholder {
+	color: var(--text-dim);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+	outline: none;
+	border-color: var(--accent);
+	box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2);
+}
+
+/* ── Links ── */
+a {
+	color: var(--accent);
+	text-decoration: none;
+}
+
+a:hover {
+	color: var(--accent-hover);
+}
+
+/* ── Utility classes ── */
+.sr-only {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	padding: 0;
+	margin: -1px;
+	overflow: hidden;
+	clip: rect(0, 0, 0, 0);
+	white-space: nowrap;
+	border: 0;
+}
+
+.text-muted {
+	color: var(--text-muted);
+}
+
+.text-dim {
+	color: var(--text-dim);
+}
+
+.font-mono {
+	font-family: var(--font-mono);
+}
+
+.truncate {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+/* ── Shared page-level patterns ── */
+
+/* Refresh button: icon-only button used in page headers.
+   Pages that need a different size (e.g. 28px) can override locally. */
+.btn-refresh {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	border-radius: var(--radius);
+	color: var(--text-muted);
+	transition:
+		color 0.15s,
+		background 0.15s;
+}
+
+.btn-refresh:hover:not(:disabled) {
+	color: var(--text);
+	background: var(--bg-hover);
+}
+
+/* Loading skeleton container */
+.loading-placeholder {
+	display: flex;
+	flex-direction: column;
+	gap: 8px;
+}
+
+/* Skeleton card placeholder -- height is page-specific, set it locally. */
+.skeleton-card {
+	background: var(--bg-surface);
+	border-radius: var(--radius);
+	border: 1px solid var(--border);
+	animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+	0%,
+	100% {
+		opacity: 0.6;
+	}
+	50% {
+		opacity: 0.3;
+	}
+}
+
+/* Empty state: centered placeholder shown when a list has no items. */
+.empty-state {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 12px;
+	padding: 40px 20px;
+	color: var(--text-dim);
+}
+
+.empty-state p {
+	margin: 0;
+	font-size: 14px;
+}
+
+/* ── Mobile touch-friendly adjustments ── */
+@media (max-width: 768px) {
+	/* Ensure touch targets meet 44px minimum (WCAG 2.5.5) */
+	button,
+	a,
+	[role='button'] {
+		min-height: 44px;
+		min-width: 44px;
+	}
+
+	/* Stack form rows vertically on mobile */
+	.form-row {
+		flex-direction: column;
+	}
+
+	/* Full-width inputs on mobile for easier interaction */
+	input,
+	textarea,
+	select {
+		width: 100%;
+	}
+}
+
+/* Offline-disabled buttons: applied by the onlineOnly Svelte action. */
+.offline-disabled {
+	position: relative;
+	opacity: 0.45;
+	cursor: not-allowed !important;
+	pointer-events: none;
+}

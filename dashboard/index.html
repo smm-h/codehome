@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="theme-color" content="#6366f1" media="(prefers-color-scheme: light)" />
+		<meta name="theme-color" content="#0f1117" media="(prefers-color-scheme: dark)" />
+		<script>
+			// Inline: set theme before CSS paints to prevent flash of wrong theme.
+			(function () {
+				var stored = localStorage.getItem('codehome-theme');
+				var explicit = localStorage.getItem('codehome-theme-explicit') === '1';
+				var dark =
+					stored && explicit
+						? stored === 'dark'
+						: window.matchMedia('(prefers-color-scheme: dark)').matches;
+				document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+			})();
+		</script>
+		<script>
+			// Early error buffer: captures errors before the app initializes.
+			// Flushed to /api/diagnostics/errors when the server is available.
+			window.__DASHBOARD_ERRORS__ = [];
+			var _errFlushTimer = null;
+			function _pushErr(e) {
+				window.__DASHBOARD_ERRORS__.push(e);
+				if (!_errFlushTimer) {
+					_errFlushTimer = setTimeout(function () {
+						_errFlushTimer = null;
+						var batch = window.__DASHBOARD_ERRORS__.splice(0);
+						if (!batch.length) return;
+						try {
+							fetch('/api/diagnostics/errors', {
+								method: 'POST',
+								headers: { 'Content-Type': 'application/json' },
+								body: JSON.stringify({ errors: batch }),
+								credentials: 'include',
+							});
+						} catch (_) {}
+					}, 1000);
+				}
+			}
+			window.onerror = function (msg, src, line, col, err) {
+				_pushErr({
+					message: String(msg),
+					source: src || '',
+					line: line || 0,
+					stack: ((err && err.stack) || '').substring(0, 500),
+					timestamp: new Date().toISOString(),
+				});
+			};
+			window.onunhandledrejection = function (event) {
+				var e = event.reason;
+				_pushErr({
+					message: String(e),
+					source: '',
+					line: 0,
+					stack: ((e && e.stack) || '').substring(0, 500),
+					timestamp: new Date().toISOString(),
+				});
+			};
+		</script>
+	</head>
+	<body>
+		<div id="app"></div>
+		<script type="module" src="/src/main.ts"></script>
+	</body>
+</html>
