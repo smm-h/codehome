@@ -68,7 +68,7 @@ def build_parser() -> argparse.ArgumentParser:
     from importlib.metadata import version
 
     parser = argparse.ArgumentParser(
-        prog="v",  # displayed as v (the recommended alias for supervisor)
+        prog="v",  # displayed as v (the recommended alias for codehome)
         description="Worktree manager for Veliu repos",
     )
     parser.add_argument("--version", action="version", version=f"%(prog)s {version('codehome')}")
