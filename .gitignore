@@ -13,3 +13,5 @@ dist/
 .env.local
 *.local-only
 uv.lock
+.codehome/
+.supervisor/
