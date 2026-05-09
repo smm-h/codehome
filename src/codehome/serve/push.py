@@ -215,7 +215,7 @@ class PushManager:
                     subscription_info=sub,
                     data=payload,
                     vapid_private_key=self._private_key_pem,
-                    vapid_claims={"sub": "mailto:dev@supervisor.local"},
+                    vapid_claims={"sub": "mailto:dev@codehome.local"},
                 )
             except WebPushException as e:
                 # 410 Gone or 404 means the subscription is no longer valid.

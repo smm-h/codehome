@@ -1,4 +1,4 @@
-"""Allow running the MCP server as: python -m supervisor.mcp.server."""
+"""Allow running the MCP server as: python -m codehome.mcp.server."""
 
 from codehome.mcp.server import main
 

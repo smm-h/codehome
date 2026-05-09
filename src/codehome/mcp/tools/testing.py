@@ -1,4 +1,4 @@
-"""Testing tools that delegate to the supervisor server API."""
+"""Testing tools that delegate to the codehome server API."""
 
 import json
 import urllib.error
@@ -6,7 +6,7 @@ import urllib.request
 
 
 def run_tests(server_url: str, auth_token: str, suite: str = "", pattern: str = "") -> str:
-    """Run tests via the supervisor server.
+    """Run tests via the codehome server.
 
     Sends a POST to {server_url}/api/tests/run with optional suite and pattern filters.
     """

@@ -10,7 +10,7 @@ Environment variables:
     SA_SESSION_ID    -- parent session identifier
     SA_WORKTREE      -- absolute path to the git worktree
     SA_PROJECT_ROOT  -- absolute path to the project root
-    SA_SERVER_URL    -- supervisor server base URL (e.g. http://127.0.0.1:9100)
+    SA_SERVER_URL    -- codehome server base URL (e.g. http://127.0.0.1:9100)
     SA_AUTH_TOKEN    -- bearer token for server API calls
 """
 
@@ -40,7 +40,7 @@ qualified_branch = task_id  # task_id doubles as the qualified branch name
 
 # -- Build the server -----------------------------------------------------------
 
-app = FastMCP("supervisor-agent")
+app = FastMCP("codehome-agent")
 
 # -- Tool wrappers --------------------------------------------------------------
 # Each wrapper closes over the environment variables and delegates to the
@@ -103,7 +103,7 @@ def _git_log(count: int = 20) -> str:
 
 
 def _run_tests(suite: str = "", pattern: str = "") -> str:
-    """Run tests via the supervisor server."""
+    """Run tests via the codehome server."""
     return testing.run_tests(server_url, auth_token, suite, pattern)
 
 

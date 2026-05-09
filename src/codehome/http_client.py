@@ -1,9 +1,9 @@
 """HTTP client for CLI-to-server communication.
 
-Thin wrapper around urllib that handles authentication (JWT from ~/.codehome/token,
-with legacy fallback to ~/.supervisor/token), server discovery (via serve.read_server_url),
-and error formatting. All CLI commands that need to talk to the server should use
-get/post/put/patch/delete from this module instead of building their own urllib calls.
+Thin wrapper around urllib that handles authentication (JWT from ~/.codehome/token),
+server discovery (via serve.read_server_url), and error formatting. All CLI commands
+that need to talk to the server should use get/post/put/patch/delete from this module
+instead of building their own urllib calls.
 """
 
 import json
@@ -25,17 +25,12 @@ _LOCALHOST_SSL_CTX = ssl.create_default_context()
 _LOCALHOST_SSL_CTX.check_hostname = False
 _LOCALHOST_SSL_CTX.verify_mode = ssl.CERT_NONE
 
-# Legacy token path; kept as module-level constant for backward compat.
-# Actual reads use _resolve_token_file() for dual-read fallback.
-_LEGACY_TOKEN = Path.home() / ".supervisor" / "token"
 TOKEN_FILE = codehome_home() / "token"
 
 
 def _resolve_token_file() -> Path:
-    """Resolve the token file: prefer ~/.codehome/token, fall back to ~/.supervisor/token."""
-    if TOKEN_FILE.exists():
-        return TOKEN_FILE
-    return _LEGACY_TOKEN
+    """Return the token file path (~/.codehome/token)."""
+    return TOKEN_FILE
 
 # One-time-per-process flag for the "routing via server" stderr banner.
 # When a `v` CLI subcommand (`v telemac screen ...`, `v tests red-green`, `v services delete-volumes`) has a

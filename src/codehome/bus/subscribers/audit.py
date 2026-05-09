@@ -1,6 +1,6 @@
 """JSONL audit subscriber: writes audit=true events to daily log files.
 
-Drop-in replacement for the legacy ``supervisor.events.emit()`` system.
+Drop-in replacement for the legacy ``codehome.events.emit()`` system.
 Writes the same envelope format to the same directory so existing tooling
 (dashboards, scripts) keeps working unchanged.
 

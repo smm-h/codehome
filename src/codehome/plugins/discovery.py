@@ -11,7 +11,7 @@ If no ``config.toml`` exists or ``[plugins] paths`` is unset, falls
 back to scanning ``ROOT / "plugins"`` for backward compatibility.
 
 Each valid manifest is parsed via
-:func:`supervisor.plugins.manifest.parse_manifest` and collected into
+:func:`codehome.plugins.manifest.parse_manifest` and collected into
 a :class:`DiscoveryResult`.  Directories starting with ``_`` or ``.``
 are skipped.  If multiple locations contain a plugin with the same
 name, the first-listed path wins (later duplicates are skipped with

@@ -102,7 +102,7 @@ async def list_vite_ports(services: ServiceManager = Depends(get_service_manager
 
     This endpoint exists so the DOM inspector (``v inspect``) can resolve
     ``<branch>/<app>/<route>`` shorthand to an absolute URL without requiring
-    a supervisor JWT token.  CI, fresh-shell, and unauthenticated agents
+    a codehome JWT token.  CI, fresh-shell, and unauthenticated agents
     are the intended callers.
 
     Why this is safe to expose without auth:

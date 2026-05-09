@@ -1,4 +1,4 @@
-"""Deployment tools that delegate to the supervisor server API."""
+"""Deployment tools that delegate to the codehome server API."""
 
 import json
 import urllib.error
@@ -14,7 +14,7 @@ def _api_call(
     payload: dict[str, Any] | None = None,
     timeout: int = 30,
 ) -> str:
-    """Make an authenticated request to the supervisor server.
+    """Make an authenticated request to the codehome server.
 
     Returns the response body as a string, or an error message.
     """
