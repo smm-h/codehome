@@ -1,0 +1,12 @@
+{
+  "_comment": "Copy to .codehome/features.json to override feature flags. See Settings page for descriptions.",
+  "conductor": true,
+  "database": true,
+  "design": true,
+  "monitoring": true,
+  "push": true,
+  "slack": true,
+  "tdd": true,
+  "team": true,
+  "terminal": true
+}
