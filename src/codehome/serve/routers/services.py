@@ -90,7 +90,7 @@ async def trigger_discover_services(
     The endpoint is idempotent: existing services are never clobbered, only
     net-new ones are registered.  Safe to call on every resolver miss.
     """
-    from codehome.serve.discovery import discover_docker
+    from codehome.core.ops.discovery import discover_docker
 
     await discover_docker()
     return _collect_vite_ports(services)

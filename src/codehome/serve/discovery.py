@@ -4,11 +4,6 @@ On startup the in-memory ServiceManager is empty, but serve-ports.json
 may still hold port allocations from a previous session.  This module
 probes those allocations and either re-registers them or releases stale
 entries.
-
-``discover_docker`` (Docker-level scan for externally-started containers)
-has been moved to the core plugin (``codehome.core.ops.discovery``)
-because it depends on ``list_branches``.  A thin re-export wrapper is kept
-here so existing callers continue to work.
 """
 
 from __future__ import annotations
@@ -260,21 +255,3 @@ async def discover_running() -> None:
     # -- Broadcast discovered services ------------------------------------
     for svc_dict in discovered:
         await fire(Event(name="service.state", payload=svc_dict))
-
-
-# ---------------------------------------------------------------------------
-# Docker-level discovery (external `docker compose up` detection)
-# ---------------------------------------------------------------------------
-# Moved to core plugin: codehome.core.ops.discovery
-# Re-exported here so existing import paths continue to work.
-
-
-async def discover_docker() -> list[dict[str, object]]:
-    """Re-export: delegates to ``codehome.core.ops.discovery.discover_docker``.
-
-    The implementation lives in the core plugin because it depends on
-    ``codehome.core.ops.branches.list_branches`` to map Docker
-    containers to core-managed branches.
-    """
-    from codehome.core.ops.discovery import discover_docker as _impl
-    return await _impl()
