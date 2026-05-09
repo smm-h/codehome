@@ -56,8 +56,6 @@ ROOT = _compute_root()
 
 # Shared infrastructure (not per-repo).
 STATE_DIR = ROOT / ".codehome"
-# Backward-compat alias (plugins may still import the old name).
-SUPERVISOR_DIR = STATE_DIR
 EVENTS_DIR = STATE_DIR / "events"
 CACHE_DIR = STATE_DIR / "cache"
 LINEAR_CACHE = CACHE_DIR / "linear.json"

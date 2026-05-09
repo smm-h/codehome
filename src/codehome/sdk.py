@@ -80,7 +80,6 @@ _LAZY_IMPORTS: dict[str, tuple[str, str | None]] = {
     "ROOT": ("codehome.paths", "ROOT"),
     "STAGING_MERGE_STATE": ("codehome.paths", "STAGING_MERGE_STATE"),
     "STATE_DIR": ("codehome.paths", "STATE_DIR"),
-    "SUPERVISOR_DIR": ("codehome.paths", "SUPERVISOR_DIR"),
     "resolve_global": ("codehome.paths", "resolve_global"),
     "codehome_home": ("codehome.paths", "codehome_home"),
     # -- Background tasks (for plugin-contributed recurring tasks) --
@@ -236,7 +235,6 @@ __all__ = [
     "ROOT",
     "STAGING_MERGE_STATE",
     "STATE_DIR",
-    "SUPERVISOR_DIR",
     "TOKEN_FILE",
     "USE_COLOR",
     "OutputCallback",
