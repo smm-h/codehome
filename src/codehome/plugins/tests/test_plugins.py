@@ -224,21 +224,25 @@ event_types = ["build-started", "build-finished"]
         with pytest.raises(ValueError, match="version"):
             parse_manifest(plugin_dir)
 
-    def test_missing_command_handler(self, tmp_path: Path) -> None:
-        """A command entry missing 'handler' raises ValueError."""
-        plugin_dir = tmp_path / "bad-cmd"
+    def test_missing_command_handler_defaults_to_empty(self, tmp_path: Path) -> None:
+        """A command entry missing 'handler' gets handler="" (group command)."""
+        plugin_dir = tmp_path / "group-cmd"
         toml_content = """\
-name = "bad-cmd"
+name = "group-cmd"
 version = "1.0.0"
 
 [[commands]]
-name = "whoops"
-description = "forgot the handler"
+name = "parent"
+description = "a group command with no handler"
 """
         _write_toml(plugin_dir, toml_content)
 
-        with pytest.raises(ValueError, match="handler"):
-            parse_manifest(plugin_dir)
+        m = parse_manifest(plugin_dir)
+
+        assert len(m.commands) == 1
+        assert m.commands[0].name == "parent"
+        assert m.commands[0].handler == ""
+        assert m.commands[0].description == "a group command with no handler"
 
     def test_missing_command_name(self, tmp_path: Path) -> None:
         """A command entry missing 'name' raises ValueError."""
