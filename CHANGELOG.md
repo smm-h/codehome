@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.2
+
+### Changed
+
+- Explicitly include py.typed marker in wheel build config
+- Updated rlsbl scaffolding to 0.16.0
+
+### Fixed
+
+- Removed unused plugin-specific resolve_incantino_root() from SDK
+- Untracked runtime .rlsbl/lock file from git
+
 ## 0.1.1
 
 ### Added
