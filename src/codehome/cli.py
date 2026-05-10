@@ -7,61 +7,88 @@ all others reject unexpected arguments to prevent silent misuse.
 
 Dispatch pattern: each leaf parser calls set_defaults(_cmd=(...)) with a
 (module_path, func_name) tuple. main() reads args._cmd, imports the
-module lazily, and calls the handler. This supports nested command groups
-without needing a flat command->handler dict at dispatch time.
+module lazily, and calls the handler. Plugin commands use LazyHandler
+callables built from TOML manifests -- no plugin Python is imported
+until the command is actually invoked.
 """
 
 from __future__ import annotations
 
 import argparse
 import importlib
+import logging
 import sys
 
 from codehome import utils
 from codehome.serve import DEFAULT_PORT
 
+_log = logging.getLogger(__name__)
 
-def _register_plugin_commands(sub: argparse._SubParsersAction[argparse.ArgumentParser]) -> list[str]:
-    """Load plugins and let each register its CLI subparser.
 
-    Called at the end of :func:`build_parser` so that plugin commands
-    appear alongside core commands.  Each plugin with a ``cli_registrar``
-    (i.e. a ``register_cli`` function in its ``handlers.py``) gets to
-    call ``sub.add_parser(...)`` and wire up its own argument tree.
+def _register_plugin_commands(
+    sub: argparse._SubParsersAction[argparse.ArgumentParser],
+) -> tuple[list[str], set[str]]:
+    """Discover plugins and build argparse trees from TOML manifests.
 
-    Errors are non-fatal: a broken plugin never prevents the rest of the
-    CLI from working.  Use ``v plugins list`` to inspect load errors.
+    No plugin Python is imported -- only TOML manifests are read and
+    argparse subparsers are built declaratively.  Handler functions are
+    wrapped in :class:`~codehome.plugins.cli_builder.LazyHandler` so
+    they are imported only when the user actually invokes the command.
 
-    Returns the list of error strings from plugin loading and CLI registration.
+    Returns:
+        A tuple of (error messages, passthrough command names).
     """
-    from codehome.plugins import registry
-    from codehome.plugins.loader import load_all_plugins
+    from codehome.plugins.cli_builder import build_commands
+    from codehome.plugins.discovery import discover_plugins
 
-    _loaded, errors = load_all_plugins()
-    # Errors are non-fatal; `v plugins list` will show them.
+    errors: list[str] = []
+    passthrough: set[str] = set()
+
+    try:
+        result = discover_plugins()
+    except Exception:
+        _log.debug("plugin discovery failed", exc_info=True)
+        errors.append("plugin discovery failed (see debug log)")
+        return errors, passthrough
+
+    errors.extend(result.errors)
 
     # Snapshot core command names so we can reject plugin collisions.
     core_commands = set(sub.choices) if hasattr(sub, "choices") else set()
 
-    for plugin in registry.list_plugins():
-        if plugin.cli_registrar is not None:
-            # Check for collision with core commands before registration.
-            plugin_cmd_names = {cmd.name for cmd in plugin.manifest.commands}
-            collisions = plugin_cmd_names & core_commands
-            if collisions:
-                names = ", ".join(sorted(collisions))
-                errors.append(f"plugin '{plugin.name}' skipped: command name(s) {names} conflict with core commands")
-                continue
-            try:
-                plugin.cli_registrar(sub)
-                core_commands.update(plugin_cmd_names)
-            except Exception:
-                import logging
+    for plugin_dir, manifest in result.plugins:
+        if not manifest.enabled:
+            continue
 
-                logging.getLogger(__name__).debug("plugin '%s' CLI registration failed", plugin.name, exc_info=True)
-                errors.append(f"plugin '{plugin.name}' CLI registration failed")
+        # Check for collision with core commands before registration.
+        plugin_cmd_names = {cmd.name for cmd in manifest.commands}
+        collisions = plugin_cmd_names & core_commands
+        if collisions:
+            names = ", ".join(sorted(collisions))
+            errors.append(
+                f"plugin '{manifest.name}' skipped: command name(s) "
+                f"{names} conflict with core commands"
+            )
+            continue
 
-    return errors
+        try:
+            build_commands(manifest.commands, sub, plugin_dir)
+            core_commands.update(plugin_cmd_names)
+        except Exception:
+            _log.debug(
+                "plugin '%s' CLI registration failed",
+                manifest.name,
+                exc_info=True,
+            )
+            errors.append(f"plugin '{manifest.name}' CLI registration failed")
+            continue
+
+        # Track passthrough plugins.
+        if manifest.passthrough:
+            # Passthrough uses the top-level command names from the plugin.
+            passthrough.update(plugin_cmd_names)
+
+    return errors, passthrough
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -146,8 +173,9 @@ def build_parser() -> argparse.ArgumentParser:
     server_sub.add_parser("check", help="run diagnostic checks on the running server")
 
     # -- dynamically registered plugin commands --------------------------------
-    plugin_errors = _register_plugin_commands(sub)
+    plugin_errors, plugin_passthrough = _register_plugin_commands(sub)
     parser._plugin_errors = plugin_errors  # type: ignore[attr-defined]  # expose to main() for warning
+    parser._plugin_passthrough = plugin_passthrough  # type: ignore[attr-defined]
 
     return parser
 
@@ -158,7 +186,7 @@ def _load_commands() -> dict[str, object]:
     Separated from main() so the doc generator can access handler
     docstrings without running the CLI.
     """
-    table = {}
+    table: dict[str, object] = {}
     _imports = [
         ("codehome.commands.home_cmd", {"home": "cmd_home"}),
         ("codehome.commands.init_cmd", {"init": "cmd_init"}),
@@ -170,16 +198,18 @@ def _load_commands() -> dict[str, object]:
         for cmd_name, attr_name in cmd_map.items():
             table[cmd_name] = getattr(mod, attr_name)
 
-    # Include plugin commands so the doc generator can list them.
-    # Plugins are already loaded by build_parser() -> _register_plugin_commands(),
-    # so the registry is populated by the time gendocs calls _load_commands().
-    from codehome.plugins import registry
+    # Plugin commands are now registered via TOML manifests.
+    # The doc generator can discover them through discover_plugins().
+    from codehome.plugins.discovery import discover_plugins
 
-    for plugin in registry.list_plugins():
-        if plugin.cli_registrar is not None:
-            # Use the register_cli function as the handler entry; the doc
-            # generator uses its docstring for richer command descriptions.
-            table[plugin.name] = plugin.cli_registrar
+    try:
+        result = discover_plugins()
+        for _plugin_dir, manifest in result.plugins:
+            if manifest.enabled and manifest.commands:
+                for cmd in manifest.commands:
+                    table[cmd.name] = cmd.description or cmd.name
+    except Exception:
+        pass  # Non-fatal for doc generation.
 
     return table
 
@@ -190,6 +220,14 @@ _PASSTHROUGH_COMMANDS: set[str] = set()
 
 
 def main() -> None:
+    # Fast-path: handle --version before any plugin discovery so it
+    # works even when plugin TOML files or config are broken.
+    if "--version" in sys.argv[1:]:
+        from importlib.metadata import version
+
+        print(f"v {version('codehome')}")
+        sys.exit(0)
+
     parser = build_parser()
 
     # Install audit subscriber on the bus singleton so CLI commands that
@@ -211,10 +249,9 @@ def main() -> None:
     args, remaining = parser.parse_known_args()
     args.extra_args = remaining
 
-    # Merge plugin passthrough commands with the core set.
-    from codehome.plugins import registry
-
-    all_passthrough = _PASSTHROUGH_COMMANDS | registry.passthrough_commands()
+    # Passthrough set from manifest-driven discovery (no plugin Python import).
+    plugin_passthrough: set[str] = getattr(parser, "_plugin_passthrough", set())
+    all_passthrough = _PASSTHROUGH_COMMANDS | plugin_passthrough
 
     # Reject unexpected arguments for commands that don't use them.
     # This prevents e.g. `v branch finalize test --cancel` silently ignoring "test"
@@ -227,16 +264,15 @@ def main() -> None:
 
     # Resolve the handler from the _cmd default set on leaf parsers.
     # Core commands: _cmd is a (module_path, func_name) tuple.
-    # Plugin commands: _cmd is a callable set directly by register_cli.
+    # Plugin commands: _cmd is a LazyHandler callable from cli_builder.
     cmd = getattr(args, "_cmd", None)
     if cmd is None:
         parser.print_help()
         sys.exit(0)
 
     if callable(cmd):
-        # Plugin handlers are stored as direct callables because their
-        # modules are loaded from arbitrary file paths, not installed
-        # packages that importlib.import_module can resolve.
+        # Plugin handlers (LazyHandler) and group-command help printers
+        # are stored as direct callables.
         handler = cmd
     else:
         module_path, func_name = cmd
