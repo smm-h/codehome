@@ -57,14 +57,21 @@ _installed_subscriptions: set[tuple[str, str, str]] = set()
 def _mount_plugin_namespaces(
     ordered: list[tuple[Path, PluginManifest]],
     state: dict[str, Any],
-) -> None:
+    errors: list[str],
+) -> set[str]:
     """Register namespace plugins as codehome.* subpackages.
 
     Must run before plugin module loading so cross-plugin imports resolve.
     Only mounts enabled plugins.  Idempotent: skips if the package name
     is already in sys.modules (handles second load_all_plugins() call).
+
+    Returns:
+        Set of plugin names whose namespace mount failed. These plugins
+        should be skipped during the subsequent loading phase.
     """
     import codehome
+
+    failed: set[str] = set()
 
     for plugin_dir, manifest in ordered:
         if not manifest.namespace:
@@ -80,27 +87,42 @@ def _mount_plugin_namespaces(
             # Already mounted (idempotent for second load_all_plugins call)
             continue
 
-        init_path = mount_dir / "__init__.py"
-        if init_path.exists():
-            # Load the real __init__.py so re-exports work
-            spec = importlib.util.spec_from_file_location(
-                pkg_name,
-                init_path,
-                submodule_search_locations=[str(mount_dir)],
-            )
-            mod = importlib.util.module_from_spec(spec)
-            mod.__path__ = [str(mount_dir)]
-            sys.modules[pkg_name] = mod
-            spec.loader.exec_module(mod)
-        else:
-            # Create empty namespace package
-            mod = types.ModuleType(pkg_name)
-            mod.__path__ = [str(mount_dir)]
-            mod.__package__ = pkg_name
-            mod.__spec__ = None
-            sys.modules[pkg_name] = mod
+        try:
+            init_path = mount_dir / "__init__.py"
+            if init_path.exists():
+                # Load the real __init__.py so re-exports work
+                spec = importlib.util.spec_from_file_location(
+                    pkg_name,
+                    init_path,
+                    submodule_search_locations=[str(mount_dir)],
+                )
+                mod = importlib.util.module_from_spec(spec)
+                mod.__path__ = [str(mount_dir)]
+                sys.modules[pkg_name] = mod
+                spec.loader.exec_module(mod)
+            else:
+                # Create empty namespace package
+                mod = types.ModuleType(pkg_name)
+                mod.__path__ = [str(mount_dir)]
+                mod.__package__ = pkg_name
+                mod.__spec__ = None
+                sys.modules[pkg_name] = mod
 
-        setattr(codehome, manifest.namespace, mod)
+            setattr(codehome, manifest.namespace, mod)
+        except Exception as exc:
+            # Clean up any partial module that was added to sys.modules.
+            sys.modules.pop(pkg_name, None)
+            log.exception(
+                "failed to mount namespace '%s' for plugin '%s'",
+                manifest.namespace,
+                manifest.name,
+            )
+            errors.append(
+                f"plugin '{manifest.name}': failed to mount namespace '{manifest.namespace}': {exc}"
+            )
+            failed.add(manifest.name)
+
+    return failed
 
 
 # ---------------------------------------------------------------------------
@@ -162,7 +184,7 @@ def load_all_plugins(root: Path | None = None) -> tuple[int, list[str]]:
         return 0, errors
 
     # 4. Mount namespace plugins as codehome.* subpackages before loading.
-    _mount_plugin_namespaces(ordered, new_state)
+    ns_failed = _mount_plugin_namespaces(ordered, new_state, errors)
 
     # 5. Clear the registry before a full reload.
     registry.clear()
@@ -171,6 +193,10 @@ def load_all_plugins(root: Path | None = None) -> tuple[int, list[str]]:
     loaded = 0
     for plugin_dir, manifest in ordered:
         name = manifest.name
+
+        # Skip plugins whose namespace mount failed.
+        if name in ns_failed:
+            continue
 
         # Only load plugins whose merged state says "enabled".
         if not new_state["plugins"].get(name, {}).get("enabled", False):
@@ -188,13 +214,24 @@ def load_all_plugins(root: Path | None = None) -> tuple[int, list[str]]:
         # files for this plugin are loaded.
         sdk_path = plugin_dir / "_sdk.py"
         _sdk_loaded = False
+        _sdk_failed = False
         if sdk_path.exists():
             sdk_spec = importlib.util.spec_from_file_location(f"_plugin_{name}__sdk", sdk_path)
             if sdk_spec and sdk_spec.loader:
                 sdk_mod = importlib.util.module_from_spec(sdk_spec)
                 sys.modules["_sdk"] = sdk_mod
-                sdk_spec.loader.exec_module(sdk_mod)
-                _sdk_loaded = True
+                try:
+                    sdk_spec.loader.exec_module(sdk_mod)
+                except Exception as exc:
+                    sys.modules.pop("_sdk", None)
+                    log.exception("failed to load _sdk.py for plugin '%s'", name)
+                    errors.append(f"plugin '{name}': failed to load _sdk.py: {exc}")
+                    _sdk_failed = True
+                else:
+                    _sdk_loaded = True
+
+        if _sdk_failed:
+            continue
 
         # -- Import optional modules and extract callables ----------------
         cli_registrar = None
