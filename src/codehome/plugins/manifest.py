@@ -67,7 +67,9 @@ class CommandDecl:
 
     Attributes:
         name: Kebab-case command identifier (e.g. ``screen-start``).
-        handler: Function name in the plugin's ``handlers.py``.
+        handler: Function name in the plugin's ``handlers.py``.  Empty
+            string means the command is a group parent; the framework
+            auto-prints help when invoked without a subcommand.
         description: Human-readable help text.
         arguments: Declared CLI arguments for this command.
         subcommands: Nested subcommands (makes CommandDecl recursive).
@@ -77,7 +79,7 @@ class CommandDecl:
     """
 
     name: str
-    handler: str
+    handler: str = ""
     description: str = ""
     arguments: tuple[ArgumentDecl, ...] = ()
     subcommands: tuple[CommandDecl, ...] = ()
@@ -291,7 +293,7 @@ def _parse_commands(raw_list: list[dict[str, Any]], path: Path) -> tuple[Command
             result.append(
                 CommandDecl(
                     name=_require(entry, "name", path),
-                    handler=_require(entry, "handler", path),
+                    handler=entry.get("handler", ""),
                     description=entry.get("description", ""),
                     arguments=arguments,
                     subcommands=subcommands,
