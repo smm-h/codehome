@@ -770,7 +770,7 @@ class TestLoadAllPlugins:
         (plugin_dir / "plugin.toml").write_text(toml_content)
 
         if not handlers_content:
-            handlers_content = "def register_cli(subparsers):\n    pass\n"
+            handlers_content = "def handle_cmd(*args, **kwargs):\n    pass\n"
 
         (plugin_dir / "handlers.py").write_text(handlers_content)
 
@@ -796,10 +796,6 @@ class TestLoadAllPlugins:
         assert plugin is not None
         assert plugin.name == "hello"
         assert plugin.version == "0.1.0"
-
-        # cli_registrar was extracted from handlers.py.
-        assert plugin.cli_registrar is not None
-        assert callable(plugin.cli_registrar)
 
         # State file was written.
         state_file = tmp_path / ".codehome" / "plugins-state.json"
@@ -832,17 +828,14 @@ class TestLoadAllPlugins:
 
         # "good" loaded, "bad" did not -- but "bad" still counts as loaded
         # because the registry entry is created even when handlers.py fails
-        # to import (cli_registrar is just None, error is recorded).
-        # The loader creates a LoadedPlugin regardless; the error is advisory.
+        # to import (error is recorded but plugin is not skipped).
         good_plugin = registry.get("good")
         assert good_plugin is not None
-        assert good_plugin.cli_registrar is not None
 
         # The bad plugin is still registered (loader doesn't skip it),
-        # but its cli_registrar is None and an error was recorded.
+        # but an error was recorded for the import failure.
         bad_plugin = registry.get("bad")
         assert bad_plugin is not None
-        assert bad_plugin.cli_registrar is None
 
         # Errors mention the bad plugin's import failure.
         assert any("bad" in e for e in errors)
@@ -923,7 +916,7 @@ class TestLoadAllPlugins:
             'handler = "handle_cmd"\n'
             'description = "A command"\n'
         )
-        handlers = "def register_cli(subparsers):\n    pass\n"
+        handlers = "def handle_cmd(*args, **kwargs):\n    pass\n"
         routes = "from types import SimpleNamespace\nrouter = SimpleNamespace(routes=[])\n"
         plugin_dir = self._setup_plugin(tmp_path, "with-router", toml_content=toml, handlers_content=handlers)
         (plugin_dir / "routes.py").write_text(routes)
@@ -978,7 +971,7 @@ class TestLoadAllPlugins:
             'handler = "handle_cmd"\n'
             'description = "A command"\n'
         )
-        handlers = "def register_cli(subparsers):\n    pass\n"
+        handlers = "def handle_cmd(*args, **kwargs):\n    pass\n"
         plugin_dir = self._setup_plugin(tmp_path, "bad-router", toml_content=toml, handlers_content=handlers)
         (plugin_dir / "routes.py").write_text("x = 42\n")
 
@@ -1005,7 +998,7 @@ class TestLoadAllPlugins:
             'group = "gate"\n'
             "timeout = 30\n"
         )
-        handlers = "def register_cli(subparsers):\n    pass\n"
+        handlers = "def handle_cmd(*args, **kwargs):\n    pass\n"
         checks_code = (
             "async def run_lint(ctx):\n"
             "    from codehome.checks.result import CheckResult\n"
@@ -1062,7 +1055,7 @@ class TestLoadAllPlugins:
             'group = "gate"\n'
             "timeout = 10\n"
         )
-        handlers = "def register_cli(subparsers):\n    pass\n"
+        handlers = "def handle_cmd(*args, **kwargs):\n    pass\n"
         checks_code = "run_lint = 'not a function'\n"
         plugin_dir = self._setup_plugin(tmp_path, "bad-check", toml_content=toml, handlers_content=handlers)
         (plugin_dir / "checks.py").write_text(checks_code)
@@ -1071,21 +1064,6 @@ class TestLoadAllPlugins:
 
         assert any("not callable" in e for e in errors)
 
-    # -- Handler guard tests ----------------------------------------------------
-
-    def test_non_callable_register_cli_produces_error(self, tmp_path: Path) -> None:
-        """A handlers.py where register_cli is not callable records an error."""
-        self._ensure_state_dir(tmp_path)
-        handlers = "register_cli = 42\n"
-        self._setup_plugin(tmp_path, "bad-handler", handlers_content=handlers)
-
-        loaded_count, errors = load_all_plugins(tmp_path)
-
-        assert loaded_count == 1
-        plugin = registry.get("bad-handler")
-        assert plugin is not None
-        assert plugin.cli_registrar is None
-        assert any("not callable" in e for e in errors)
 
 
 # ===========================================================================

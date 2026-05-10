@@ -64,7 +64,7 @@ def _setup_plugin(
     (plugin_dir / "plugin.toml").write_text(toml_content)
 
     if not handlers_content:
-        handlers_content = "def register_cli(subparsers):\n    pass\n"
+        handlers_content = "def handle_cmd(*args, **kwargs):\n    pass\n"
     (plugin_dir / "handlers.py").write_text(handlers_content)
 
     if sdk_content is not None:

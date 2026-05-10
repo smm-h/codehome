@@ -234,22 +234,14 @@ def load_all_plugins(root: Path | None = None) -> tuple[int, list[str]]:
             continue
 
         # -- Import optional modules and extract callables ----------------
-        cli_registrar = None
         router = None
 
-        # handlers.py -- CLI registration function.
+        # handlers.py -- command handler functions referenced by manifest.
         if manifest.commands:
             handlers_path = plugin_dir / "handlers.py"
             if handlers_path.is_file():
                 mod = _import_module_from_file(name, handlers_path, persist=True)
-                if mod is not None:
-                    cli_registrar = getattr(mod, "register_cli", None)
-                    if cli_registrar is None:
-                        errors.append(f"plugin '{name}': handlers.py has no 'register_cli' function")
-                    elif not callable(cli_registrar):
-                        errors.append(f"plugin '{name}': 'register_cli' in handlers.py is not callable")
-                        cli_registrar = None
-                else:
+                if mod is None:
                     errors.append(f"plugin '{name}': failed to import handlers.py")
             else:
                 errors.append(f"plugin '{name}': declares commands but handlers.py not found")
@@ -308,8 +300,8 @@ def load_all_plugins(root: Path | None = None) -> tuple[int, list[str]]:
                 errors.append(f"plugin '{name}': declares checks but checks.py not found")
 
         # Remove the generic "_sdk" alias but keep the unique name so that
-        # deferred calls (e.g., register_cli at argparse build time) can
-        # still resolve imports from _sdk via the cached module.
+        # deferred calls (e.g., handler functions at argparse build time)
+        # can still resolve imports from _sdk via the cached module.
         if _sdk_loaded:
             sys.modules.pop("_sdk", None)
 
@@ -320,7 +312,6 @@ def load_all_plugins(root: Path | None = None) -> tuple[int, list[str]]:
             description=manifest.description,
             plugin_dir=str(plugin_dir),
             manifest=manifest,
-            cli_registrar=cli_registrar,
             router=router,
             public_router=public_router,
         )

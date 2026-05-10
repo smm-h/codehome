@@ -34,8 +34,6 @@ class LoadedPlugin:
         description: Human-readable summary of what the plugin does.
         plugin_dir: Absolute path to the plugin's directory on disk.
         manifest: The parsed PluginManifest instance.
-        cli_registrar: The ``register_cli`` function from the plugin's
-            ``handlers.py``, or ``None`` if the plugin has no CLI.
         router: A FastAPI ``APIRouter`` from the plugin's ``routes.py``,
             or ``None`` if the plugin exposes no HTTP endpoints.
 
@@ -46,7 +44,6 @@ class LoadedPlugin:
     description: str
     plugin_dir: str
     manifest: PluginManifest
-    cli_registrar: Any = None
     router: Any = None
     public_router: Any = None
 

@@ -34,7 +34,7 @@ async def list_plugins() -> list[dict[str, Any]]:
             "version": plugin.version,
             "description": plugin.description,
             "has_dashboard": manifest.dashboard is not None,
-            "has_cli": plugin.cli_registrar is not None,
+            "has_cli": bool(plugin.manifest.commands),
             "has_checks": bool(plugin.manifest.checks),
         }
         if manifest.dashboard is not None:
@@ -66,7 +66,7 @@ async def get_plugin(name: str) -> dict[str, Any]:
         "version": plugin.version,
         "description": plugin.description,
         "has_dashboard": manifest.dashboard is not None,
-        "has_cli": plugin.cli_registrar is not None,
+        "has_cli": bool(plugin.manifest.commands),
         "has_checks": bool(plugin.manifest.checks),
         "commands": [{"name": c.name, "description": c.description} for c in manifest.commands],
         "checks": [{"name": c.name, "group": c.group, "timeout": c.timeout} for c in manifest.checks],
