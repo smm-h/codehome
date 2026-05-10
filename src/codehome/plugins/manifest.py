@@ -26,6 +26,42 @@ if TYPE_CHECKING:
 
 
 @dataclass(frozen=True)
+class ArgumentDecl:
+    """A CLI argument declared by a plugin command.
+
+    Attributes:
+        name: Argument name. Positionals don't start with ``-``.
+            Optionals start with ``--``.
+        short: Short form (e.g. ``-B``). Empty string means no short form.
+        help: Help text.
+        type: One of ``str``, ``int``, ``float``, ``path``, ``bool``.
+        required: Whether the argument is required.
+        default: Default value. ``None`` means no default set.
+        choices: Valid choices. Empty means unconstrained.
+        nargs: One of ``""``, ``?``, ``*``, ``+``, ``remainder``.
+        action: One of ``""``, ``store_true``, ``store_false``, ``append``,
+            ``count``.
+        dest: Destination attribute name. Empty means argparse derives it.
+        metavar: Metavar for help display. Empty means argparse default.
+        hidden: If ``True``, help is suppressed (argparse.SUPPRESS).
+
+    """
+
+    name: str
+    short: str = ""
+    help: str = ""
+    type: str = "str"
+    required: bool = False
+    default: object = None
+    choices: tuple[str, ...] = ()
+    nargs: str = ""
+    action: str = ""
+    dest: str = ""
+    metavar: str = ""
+    hidden: bool = False
+
+
+@dataclass(frozen=True)
 class CommandDecl:
     """A CLI command declared by a plugin.
 
@@ -33,14 +69,19 @@ class CommandDecl:
         name: Kebab-case command identifier (e.g. ``screen-start``).
         handler: Function name in the plugin's ``handlers.py``.
         description: Human-readable help text.
-        group: CLI subgroup (empty string means top-level under the plugin).
+        arguments: Declared CLI arguments for this command.
+        subcommands: Nested subcommands (makes CommandDecl recursive).
+        includes: Names of argument templates to include (resolved at
+            parser-build time).
 
     """
 
     name: str
     handler: str
     description: str = ""
-    group: str = ""
+    arguments: tuple[ArgumentDecl, ...] = ()
+    subcommands: tuple[CommandDecl, ...] = ()
+    includes: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -210,17 +251,51 @@ def _require(data: dict[str, Any], key: str, path: Path) -> str:
     return value
 
 
+def _parse_argument(raw: dict[str, Any], path: Path) -> ArgumentDecl:
+    """Parse a single argument declaration from a TOML dict."""
+    return ArgumentDecl(
+        name=_require(raw, "name", path),
+        short=raw.get("short", ""),
+        help=raw.get("help", ""),
+        type=raw.get("type", "str"),
+        required=bool(raw.get("required", False)),
+        default=raw.get("default"),
+        choices=tuple(raw.get("choices", ())),
+        nargs=raw.get("nargs", ""),
+        action=raw.get("action", ""),
+        dest=raw.get("dest", ""),
+        metavar=raw.get("metavar", ""),
+        hidden=bool(raw.get("hidden", False)),
+    )
+
+
 def _parse_commands(raw_list: list[dict[str, Any]], path: Path) -> tuple[CommandDecl, ...]:
-    """Parse the ``[[commands]]`` array from the manifest."""
+    """Parse the ``[[commands]]`` array from the manifest.
+
+    Handles recursive subcommand nesting and argument declarations.
+    """
     result: list[CommandDecl] = []
     for i, entry in enumerate(raw_list):
         try:
+            # Parse nested arguments.
+            raw_args = entry.get("arguments", [])
+            arguments = tuple(_parse_argument(a, path) for a in raw_args)
+
+            # Parse nested subcommands (recursive).
+            raw_subs = entry.get("subcommands", [])
+            subcommands = _parse_commands(raw_subs, path)
+
+            # Parse includes (template names).
+            includes = tuple(entry.get("includes", ()))
+
             result.append(
                 CommandDecl(
                     name=_require(entry, "name", path),
                     handler=_require(entry, "handler", path),
                     description=entry.get("description", ""),
-                    group=entry.get("group", ""),
+                    arguments=arguments,
+                    subcommands=subcommands,
+                    includes=includes,
                 )
             )
         except (TypeError, KeyError) as exc:

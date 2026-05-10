@@ -68,7 +68,7 @@ async def get_plugin(name: str) -> dict[str, Any]:
         "has_dashboard": manifest.dashboard is not None,
         "has_cli": plugin.cli_registrar is not None,
         "has_checks": bool(plugin.manifest.checks),
-        "commands": [{"name": c.name, "description": c.description, "group": c.group} for c in manifest.commands],
+        "commands": [{"name": c.name, "description": c.description} for c in manifest.commands],
         "checks": [{"name": c.name, "group": c.group, "timeout": c.timeout} for c in manifest.checks],
         "dashboard": {
             "group": manifest.dashboard.group,

@@ -20,6 +20,7 @@ from codehome.plugins import registry
 from codehome.plugins.discovery import discover_plugins
 from codehome.plugins.loader import _topological_sort, load_all_plugins
 from codehome.plugins.manifest import (
+    ArgumentDecl,
     CommandDecl,
     DashboardDecl,
     PluginManifest,
@@ -115,7 +116,6 @@ class TestManifestParsing:
         assert m.commands[0].name == "hello"
         assert m.commands[0].handler == "handle_hello"
         assert m.commands[0].description == "Say hello"
-        assert m.commands[0].group == ""
         assert m.checks == ()
         assert m.dashboard is None
 
@@ -135,7 +135,6 @@ passthrough = true
 name = "run"
 handler = "handle_run"
 description = "Run the thing"
-group = "ops"
 
 [[commands]]
 name = "stop"
@@ -176,12 +175,10 @@ event_types = ["build-started", "build-finished"]
             name="run",
             handler="handle_run",
             description="Run the thing",
-            group="ops",
         )
         assert m.commands[1].name == "stop"
         assert m.commands[1].handler == "handle_stop"
         assert m.commands[1].description == ""  # defaults
-        assert m.commands[1].group == ""
 
         # Checks
         assert len(m.checks) == 1
