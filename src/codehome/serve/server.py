@@ -14,7 +14,6 @@ from codehome.paths import codehome_home
 from codehome.serve.agent_sessions import agent_sessions
 from codehome.serve.background import background_tasks
 from codehome.serve.auth_deps import get_current_user
-from codehome.core.ops.discovery import discover_docker
 from codehome.serve.discovery import discover_running
 from codehome.serve.error_tracking import init_sentry
 from codehome.serve.events import events
@@ -123,6 +122,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     # outside the server (raw `docker compose up`, `make up`, etc.).
     # Read-only; safe to call unconditionally.  See discovery.discover_docker.
     try:
+        from codehome.core.ops.discovery import discover_docker
+
         docker_discovered = await discover_docker()
     except Exception:
         docker_discovered = []
