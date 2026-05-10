@@ -202,44 +202,6 @@ def load_sibling(name: str, caller_file: str, *, cache: bool = False) -> types.M
     return mod
 
 
-def resolve_incantino_root(fallback_super_root: Path | None = None) -> Path:
-    """Resolve the incantino project root directory.
-
-    Resolution order:
-    1. INCANTINO_ROOT env var (explicit override)
-    2. ~/Projects/incantino (standalone repo after extraction)
-    3. <super_root>/incantino/ (legacy monorepo path, fallback)
-
-    If fallback_super_root is not provided, it is computed from
-    codehome.paths.ROOT (the super project root).
-    """
-    import os
-    from pathlib import Path as _Path
-
-    # 1. Explicit env var
-    env = os.environ.get("INCANTINO_ROOT")
-    if env:
-        p = _Path(env).expanduser().resolve()
-        if p.is_dir():
-            return p
-
-    # 2. Standalone repo (post-extraction canonical location)
-    standalone = _Path.home() / "Projects" / "incantino"
-    if standalone.is_dir():
-        return standalone
-
-    # 3. Legacy monorepo path
-    if fallback_super_root is None:
-        fallback_super_root = ROOT
-    legacy = fallback_super_root / "incantino"
-    if legacy.is_dir():
-        return legacy
-
-    # Nothing found -- return the standalone path so error messages
-    # point the user to the expected location.
-    return standalone
-
-
 def get_plugin_cache_dir(plugin_name: str, key: str) -> Path:
     """Return the cache directory for a plugin, creating it if needed.
 
@@ -318,7 +280,6 @@ __all__ = [
     "red",
     "render_box_table",
     "resolve_global",
-    "resolve_incantino_root",
     "run_command",
     "run_gh",
     "run_git",
