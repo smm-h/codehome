@@ -122,8 +122,13 @@ class LazyHandler:
         return func
 
 
-def _add_argument(parser: argparse.ArgumentParser, arg: ArgumentDecl) -> None:
-    """Add a single ArgumentDecl to an argparse parser."""
+def _build_arg_kwargs(arg: ArgumentDecl) -> tuple[list[str], dict[str, object]]:
+    """Build the name-args list and kwargs dict for ``add_argument``.
+
+    Returns a ``(name_args, kwargs)`` tuple ready to be unpacked into
+    ``parser.add_argument(*name_args, **kwargs)`` (or the equivalent
+    call on a mutually exclusive group).
+    """
     kwargs: dict[str, object] = {}
 
     # Help text.
@@ -180,10 +185,16 @@ def _add_argument(parser: argparse.ArgumentParser, arg: ArgumentDecl) -> None:
         name_args = [arg.name]
         if arg.short:
             name_args.append(arg.short)
-        parser.add_argument(*name_args, **kwargs)
     else:
-        # Positional argument.
-        parser.add_argument(arg.name, **kwargs)
+        name_args = [arg.name]
+
+    return name_args, kwargs
+
+
+def _add_argument(parser: argparse.ArgumentParser, arg: ArgumentDecl) -> None:
+    """Add a single ArgumentDecl to an argparse parser."""
+    name_args, kwargs = _build_arg_kwargs(arg)
+    parser.add_argument(*name_args, **kwargs)
 
 
 def _print_help_handler(parser: argparse.ArgumentParser) -> object:
@@ -235,9 +246,20 @@ def build_commands(
                 arg_order.append(arg.name)
             seen_names[arg.name] = arg
 
-        # 3. Add all arguments to the parser.
+        # 3. Add all arguments to the parser, respecting mutex groups.
+        #    Collect mutex group names in insertion order, then create one
+        #    argparse mutually exclusive group per unique name.
+        mutex_groups: dict[str, argparse._MutuallyExclusiveGroup] = {}
         for name in arg_order:
-            _add_argument(parser, seen_names[name])
+            arg = seen_names[name]
+            if arg.mutex_group:
+                if arg.mutex_group not in mutex_groups:
+                    mutex_groups[arg.mutex_group] = parser.add_mutually_exclusive_group()
+                group = mutex_groups[arg.mutex_group]
+                name_args, kwargs = _build_arg_kwargs(arg)
+                group.add_argument(*name_args, **kwargs)
+            else:
+                _add_argument(parser, arg)
 
         # 4. Handle subcommands or set handler.
         if cmd.subcommands:

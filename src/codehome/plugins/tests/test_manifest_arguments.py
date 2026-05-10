@@ -880,3 +880,72 @@ class TestEdgeCases:
         assert arg.name == "filename"
         assert not arg.name.startswith("-")
         assert arg.type == "path"
+
+
+# ===========================================================================
+# 9. Mutex group parsing
+# ===========================================================================
+
+
+class TestParseMutexGroup:
+    """Tests for parsing mutex_group from TOML argument entries."""
+
+    def test_mutex_group_parsed(self, tmp_path: Path) -> None:
+        """Arguments with mutex_group parse the field correctly."""
+        plugin_dir = tmp_path / "mutex"
+        toml = (
+            _header()
+            + '[[commands]]\n'
+            'name = "cmd"\n'
+            'handler = "h"\n'
+            '\n'
+            '[[commands.arguments]]\n'
+            'name = "--poll"\n'
+            'action = "store_true"\n'
+            'dest = "poll"\n'
+            'mutex_group = "poll-mode"\n'
+            '\n'
+            '[[commands.arguments]]\n'
+            'name = "--no-poll"\n'
+            'action = "store_true"\n'
+            'dest = "poll"\n'
+            'mutex_group = "poll-mode"\n'
+        )
+        _write_toml(plugin_dir, toml)
+
+        m = parse_manifest(plugin_dir)
+        args = m.commands[0].arguments
+
+        assert len(args) == 2
+        assert args[0].mutex_group == "poll-mode"
+        assert args[1].mutex_group == "poll-mode"
+
+    def test_mutex_group_default_empty(self, tmp_path: Path) -> None:
+        """An argument without mutex_group defaults to empty string."""
+        plugin_dir = tmp_path / "no-mutex"
+        toml = (
+            _header()
+            + '[[commands]]\n'
+            'name = "cmd"\n'
+            'handler = "h"\n'
+            '\n'
+            '[[commands.arguments]]\n'
+            'name = "--flag"\n'
+            'action = "store_true"\n'
+        )
+        _write_toml(plugin_dir, toml)
+
+        m = parse_manifest(plugin_dir)
+        arg = m.commands[0].arguments[0]
+
+        assert arg.mutex_group == ""
+
+    def test_mutex_group_on_dataclass(self) -> None:
+        """ArgumentDecl accepts mutex_group as a keyword argument."""
+        arg = ArgumentDecl(name="--poll", mutex_group="poll-mode")
+        assert arg.mutex_group == "poll-mode"
+
+    def test_mutex_group_default_on_dataclass(self) -> None:
+        """ArgumentDecl defaults mutex_group to empty string."""
+        arg = ArgumentDecl(name="--flag")
+        assert arg.mutex_group == ""

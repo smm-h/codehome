@@ -643,3 +643,81 @@ class TestIntegration:
         collision_errors = [e for e in errors if "conflict with core commands" in e]
         assert len(collision_errors) >= 1
         assert "home" in collision_errors[0]
+
+
+# ===========================================================================
+# 9. Mutually exclusive argument groups
+# ===========================================================================
+
+
+class TestMutexGroups:
+    """Tests for mutually exclusive argument groups via mutex_group."""
+
+    def _make_parser_and_sub(self) -> tuple[argparse.ArgumentParser, argparse._SubParsersAction]:
+        parser = argparse.ArgumentParser()
+        sub = parser.add_subparsers(dest="command")
+        return parser, sub
+
+    def test_mutex_group_rejects_both_flags(self, tmp_path: Path) -> None:
+        """Passing both arguments from the same mutex_group raises an error."""
+        parser, sub = self._make_parser_and_sub()
+        poll_arg = ArgumentDecl(name="--poll", action="store_true", dest="poll", mutex_group="poll-mode")
+        no_poll_arg = ArgumentDecl(name="--no-poll", action="store_true", dest="poll", mutex_group="poll-mode")
+        cmd = CommandDecl(name="run", handler="h", arguments=(poll_arg, no_poll_arg))
+        build_commands((cmd,), sub, tmp_path)
+
+        # Each individually works.
+        args = parser.parse_args(["run", "--poll"])
+        assert args.poll is True
+
+        args = parser.parse_args(["run", "--no-poll"])
+        assert args.poll is True  # store_true on both; value is True either way
+
+        # Both together must be rejected by argparse.
+        with pytest.raises(SystemExit):
+            parser.parse_args(["run", "--poll", "--no-poll"])
+
+    def test_mutex_group_allows_neither(self, tmp_path: Path) -> None:
+        """Omitting both arguments from a mutex_group is allowed."""
+        parser, sub = self._make_parser_and_sub()
+        poll_arg = ArgumentDecl(name="--poll", action="store_true", dest="poll", mutex_group="poll-mode")
+        no_poll_arg = ArgumentDecl(name="--no-poll", action="store_true", dest="poll", mutex_group="poll-mode")
+        cmd = CommandDecl(name="run", handler="h", arguments=(poll_arg, no_poll_arg))
+        build_commands((cmd,), sub, tmp_path)
+
+        # Neither flag -- should parse fine.
+        args = parser.parse_args(["run"])
+        assert args.command == "run"
+
+    def test_separate_mutex_groups_are_independent(self, tmp_path: Path) -> None:
+        """Arguments in different mutex_groups don't conflict with each other."""
+        parser, sub = self._make_parser_and_sub()
+        a1 = ArgumentDecl(name="--json", action="store_true", mutex_group="format")
+        a2 = ArgumentDecl(name="--text", action="store_true", mutex_group="format")
+        a3 = ArgumentDecl(name="--poll", action="store_true", mutex_group="poll-mode")
+        a4 = ArgumentDecl(name="--no-poll", action="store_true", mutex_group="poll-mode")
+        cmd = CommandDecl(name="run", handler="h", arguments=(a1, a2, a3, a4))
+        build_commands((cmd,), sub, tmp_path)
+
+        # One from each group is fine.
+        args = parser.parse_args(["run", "--json", "--poll"])
+        assert args.json is True
+        assert args.poll is True
+
+        # Two from the same group is rejected.
+        with pytest.raises(SystemExit):
+            parser.parse_args(["run", "--json", "--text"])
+
+    def test_non_mutex_args_unaffected(self, tmp_path: Path) -> None:
+        """Arguments without mutex_group are added normally alongside mutex args."""
+        parser, sub = self._make_parser_and_sub()
+        poll_arg = ArgumentDecl(name="--poll", action="store_true", mutex_group="poll-mode")
+        no_poll_arg = ArgumentDecl(name="--no-poll", action="store_true", mutex_group="poll-mode")
+        verbose_arg = ArgumentDecl(name="--verbose", short="-v", action="store_true")
+        cmd = CommandDecl(name="run", handler="h", arguments=(poll_arg, no_poll_arg, verbose_arg))
+        build_commands((cmd,), sub, tmp_path)
+
+        # Non-mutex arg works alongside a mutex arg.
+        args = parser.parse_args(["run", "--poll", "--verbose"])
+        assert args.poll is True
+        assert args.verbose is True

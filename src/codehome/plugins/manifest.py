@@ -44,6 +44,9 @@ class ArgumentDecl:
         dest: Destination attribute name. Empty means argparse derives it.
         metavar: Metavar for help display. Empty means argparse default.
         hidden: If ``True``, help is suppressed (argparse.SUPPRESS).
+        mutex_group: Name of a mutually exclusive group. Arguments with the
+            same non-empty mutex_group on the same command are placed in an
+            argparse mutually exclusive group. Empty means no group.
 
     """
 
@@ -59,6 +62,7 @@ class ArgumentDecl:
     dest: str = ""
     metavar: str = ""
     hidden: bool = False
+    mutex_group: str = ""
 
 
 @dataclass(frozen=True)
@@ -268,6 +272,7 @@ def _parse_argument(raw: dict[str, Any], path: Path) -> ArgumentDecl:
         dest=raw.get("dest", ""),
         metavar=raw.get("metavar", ""),
         hidden=bool(raw.get("hidden", False)),
+        mutex_group=raw.get("mutex_group", ""),
     )
 
 
