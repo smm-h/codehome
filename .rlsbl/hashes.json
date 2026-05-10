@@ -1,8 +1,8 @@
 {
-  ".github/workflows/ci.yml": "83903a715b1d07683962b041e8f56727440e239070eb055995b5f6c863dfa813",
+  ".github/workflows/ci.yml": "74e8bc4279390a9c5ed79fa158814b72148df2f0d9e810644cf5e2f226f9a8b1",
   ".github/workflows/publish.yml": "ff275580a98127104d28ce4a9b2992ce6a30a5d96de9bfcaa1b95bee97e5e2da",
   "CHANGELOG.md": "7a6ec46141007c18090a0ff325e2dd68cd51588c4e0b5af7b580365e5eaaca85",
-  ".gitignore": "5997d10bd2597a912beff932e3135e88f40c7dd0390c368ad3bfd0953a4d8a04",
+  ".gitignore": "fe3c46d1170162c342763bff9b85fefe6dbdc3e6e3a87cbb91413bb5799877c4",
   "CLAUDE.md": "cedcd92451dcbd4f824d64709e058fa3bd2c1c92563463296a2eddf1f8414429",
   ".rlsbl/hooks/pre-release.sh": "9bae4134d0a4c302287766f9a4a2923b6c5706d2cc7078f553fec843b8cd5a06",
   ".rlsbl/hooks/post-release.sh": "b455f8511e0b2655509ecf5dcb0ab7da5bb7c961f47910ff8e00cab5bd51f833",
