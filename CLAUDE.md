@@ -1,5 +1,12 @@
 # codehome
 
+A plugin runtime for developer tools. The core provides a CLI, a FastAPI server, an event bus, state stores (scoped to branch/repo/project/global), a check framework, and a Svelte 5 dashboard. Plugins supply the actual functionality: commands, API routes, checks, event handlers, and UI panels. Plugin discovery is manifest-driven with lazy loading and dependency sorting.
+
+- **Backend**: Python 3.11+ (FastAPI, Pydantic, structlog, JWT auth, Docker SDK, MCP support)
+- **Frontend**: Svelte 5 + Vite (theming, SDUI rendering, auth)
+- **Dual-published**: NPM (dashboard) + PyPI (backend)
+- **Version**: 0.1.x (early alpha)
+
 ## Release workflow
 
 This project uses [rlsbl](https://github.com/smm-h/rlsbl) for release orchestration.
