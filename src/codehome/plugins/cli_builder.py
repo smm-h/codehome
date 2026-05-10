@@ -29,7 +29,7 @@ if TYPE_CHECKING:
     from codehome.plugins.manifest import ArgumentDecl, CommandDecl
 
 # Actions that are incompatible with the ``type`` kwarg in argparse.
-_NO_TYPE_ACTIONS = frozenset({"store_true", "store_false", "append", "count"})
+_NO_TYPE_ACTIONS = frozenset({"store_true", "store_false", "count"})
 
 
 def map_type(type_str: str) -> type | None:

@@ -120,6 +120,17 @@ class TestBuildCommands:
         assert args.count == 5
         assert isinstance(args.count, int)
 
+    def test_append_action_with_int_type(self, tmp_path: Path) -> None:
+        """action='append' with type='int' applies int converter to each value."""
+        parser, sub = self._make_parser_and_sub()
+        arg = ArgumentDecl(name="--num", type="int", action="append")
+        cmd = CommandDecl(name="collect", handler="h", arguments=(arg,))
+        build_commands((cmd,), sub, tmp_path)
+
+        args = parser.parse_args(["collect", "--num", "1", "--num", "2", "--num", "3"])
+        assert args.num == [1, 2, 3]
+        assert all(isinstance(v, int) for v in args.num)
+
     def test_command_with_path_type(self, tmp_path: Path) -> None:
         """A path-typed argument parses as Path."""
         parser, sub = self._make_parser_and_sub()
