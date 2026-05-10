@@ -40,6 +40,7 @@ def _register_plugin_commands(
     """
     from codehome.plugins.cli_builder import build_commands
     from codehome.plugins.discovery import discover_plugins
+    from codehome.plugins.loader import _mount_plugin_namespaces
 
     errors: list[str] = []
     passthrough: set[str] = set()
@@ -52,6 +53,13 @@ def _register_plugin_commands(
         return errors, passthrough
 
     errors.extend(result.errors)
+
+    # Mount plugin namespaces (codehome.<ns>) so cross-plugin imports
+    # resolve when lazy handlers are eventually invoked.  Uses a
+    # lightweight state dict derived from manifests to avoid state-file
+    # I/O during CLI startup.
+    state = {"plugins": {m.name: {"enabled": m.enabled} for _, m in result.plugins}}
+    _mount_plugin_namespaces(result.plugins, state, errors)
 
     # Snapshot core command names so we can reject plugin collisions.
     core_commands = set(sub.choices) if hasattr(sub, "choices") else set()
