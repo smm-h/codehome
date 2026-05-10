@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.2.0
+
+### Added
+
+- Declarative CLI: plugin commands, arguments, and subcommands are now defined in plugin.toml instead of Python code
+- Argument templates: shared argument patterns (branch, dry-run, deploy-flags) via `includes` on commands
+- Mutually exclusive argument groups via `mutex_group` field on arguments
+- `--version` now works instantly, before any plugin discovery
+
+### Changed
+
+- Plugin manifests use `[[commands.arguments]]` and `[[commands.subcommands]]` for CLI declarations (breaking change for plugins using `register_cli()`)
+- `CommandDecl.group` removed from manifest schema; use nested `subcommands` instead
+- `CommandDecl.handler` is now optional (group commands omit it)
+- Handler references support `module:function` syntax for handlers in sibling modules
+
+### Fixed
+
+- A broken plugin no longer crashes the entire CLI; it is skipped with a warning
+- `codehome --version` and `--help` work even when plugins have import errors
+
 ## 0.1.2
 
 Internal improvements.
