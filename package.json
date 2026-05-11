@@ -1,6 +1,6 @@
 {
   "name": "codehome",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Plugin runtime for dev tools: server, auth, event bus, check framework, and SDK",
   "license": "MIT",
   "bin": {
