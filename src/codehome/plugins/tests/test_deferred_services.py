@@ -183,6 +183,122 @@ class TestDeferredWithModuleRef:
         assert result == 42
 
 
+class TestDeferredSdkImport:
+    """Deferred services whose handler module imports from _sdk."""
+
+    def test_handler_importing_sdk_resolves(self, tmp_path: Path) -> None:
+        """A handler that does ``from _sdk import ...`` should work."""
+        plugin = tmp_path / "sdk_plugin"
+        plugin.mkdir()
+
+        # _sdk.py provides a helper used by handlers.py.
+        (plugin / "_sdk.py").write_text(
+            "def helper():\n"
+            "    return 'from sdk'\n"
+        )
+        (plugin / "handlers.py").write_text(
+            "from _sdk import helper\n"
+            "\n"
+            "def my_service():\n"
+            "    return helper()\n"
+        )
+
+        reg = ServiceRegistry()
+        reg.set_deferred_services({
+            "sdk.service": (plugin, "my_service", "sdk_plugin", "uses _sdk"),
+        })
+
+        result = reg.call("sdk.service")
+        assert result == "from sdk"
+
+    def test_sdk_not_leaked_after_resolve(self, tmp_path: Path) -> None:
+        """_sdk should not remain in sys.modules after resolution."""
+        import sys
+
+        plugin = tmp_path / "sdk_plugin2"
+        plugin.mkdir()
+        (plugin / "_sdk.py").write_text("VALUE = 99\n")
+        (plugin / "handlers.py").write_text(
+            "from _sdk import VALUE\n"
+            "\n"
+            "def svc():\n"
+            "    return VALUE\n"
+        )
+
+        # Ensure _sdk is not in sys.modules before.
+        sys.modules.pop("_sdk", None)
+
+        reg = ServiceRegistry()
+        reg.set_deferred_services({
+            "sdk2.svc": (plugin, "svc", "sdk_plugin2", "desc"),
+        })
+        assert reg.call("sdk2.svc") == 99
+        assert "_sdk" not in sys.modules
+
+    def test_sdk_restored_if_previously_set(self, tmp_path: Path) -> None:
+        """If _sdk was already in sys.modules, it is restored after resolve."""
+        import sys
+        import types
+
+        plugin = tmp_path / "sdk_plugin3"
+        plugin.mkdir()
+        (plugin / "_sdk.py").write_text("X = 1\n")
+        (plugin / "handlers.py").write_text(
+            "from _sdk import X\n"
+            "\n"
+            "def svc():\n"
+            "    return X\n"
+        )
+
+        # Plant a fake _sdk that should be restored.
+        sentinel = types.ModuleType("_sdk")
+        sentinel.MARKER = "original"  # type: ignore[attr-defined]
+        sys.modules["_sdk"] = sentinel
+
+        reg = ServiceRegistry()
+        reg.set_deferred_services({
+            "sdk3.svc": (plugin, "svc", "sdk_plugin3", "desc"),
+        })
+        assert reg.call("sdk3.svc") == 1
+        assert sys.modules.get("_sdk") is sentinel
+
+        # Clean up.
+        sys.modules.pop("_sdk", None)
+
+    def test_no_sdk_file_still_works(self, tmp_path: Path) -> None:
+        """Plugins without _sdk.py should resolve normally."""
+        plugin = tmp_path / "no_sdk_plugin"
+        plugin.mkdir()
+        (plugin / "handlers.py").write_text(
+            "def svc():\n"
+            "    return 'no sdk needed'\n"
+        )
+
+        reg = ServiceRegistry()
+        reg.set_deferred_services({
+            "nosdk.svc": (plugin, "svc", "no_sdk_plugin", "desc"),
+        })
+        assert reg.call("nosdk.svc") == "no sdk needed"
+
+    def test_sdk_load_failure_prevents_resolution(self, tmp_path: Path) -> None:
+        """If _sdk.py itself fails to import, resolution should fail gracefully."""
+        plugin = tmp_path / "bad_sdk_plugin"
+        plugin.mkdir()
+        (plugin / "_sdk.py").write_text("raise RuntimeError('sdk broken')\n")
+        (plugin / "handlers.py").write_text(
+            "from _sdk import something\n"
+            "\n"
+            "def svc():\n"
+            "    return something()\n"
+        )
+
+        reg = ServiceRegistry()
+        reg.set_deferred_services({
+            "badsdk.svc": (plugin, "svc", "bad_sdk_plugin", "desc"),
+        })
+        assert reg.get_typed("badsdk.svc", object) is None
+
+
 class TestDeferredResolutionFailures:
     """Graceful handling of resolution failures."""
 

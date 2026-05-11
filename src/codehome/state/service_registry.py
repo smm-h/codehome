@@ -117,6 +117,38 @@ class ServiceRegistry:
                 return False
             mod = importlib.util.module_from_spec(spec)
             sys.modules[spec_name] = mod
+
+            # Set up the plugin's _sdk.py so ``from _sdk import ...``
+            # works inside the handler module, mirroring what loader.py
+            # does at plugin-load time (lines 229-249).
+            sdk_path = deferred.plugin_dir / "_sdk.py"
+            prev_sdk = sys.modules.get("_sdk")
+            _sdk_installed = False
+            if sdk_path.is_file():
+                sdk_spec_name = f"_plugin_{deferred.plugin_name}__sdk"
+                sdk_mod = sys.modules.get(sdk_spec_name)
+                if sdk_mod is None:
+                    sdk_spec = importlib.util.spec_from_file_location(
+                        sdk_spec_name, sdk_path
+                    )
+                    if sdk_spec and sdk_spec.loader:
+                        sdk_mod = importlib.util.module_from_spec(sdk_spec)
+                        sys.modules[sdk_spec_name] = sdk_mod
+                        try:
+                            sdk_spec.loader.exec_module(sdk_mod)
+                        except Exception:
+                            sys.modules.pop(sdk_spec_name, None)
+                            logger.exception(
+                                "Deferred service %r: failed to load _sdk.py for plugin %r",
+                                name,
+                                deferred.plugin_name,
+                            )
+                            sys.modules.pop(spec_name, None)
+                            return False
+                if sdk_mod is not None:
+                    sys.modules["_sdk"] = sdk_mod
+                    _sdk_installed = True
+
             try:
                 spec.loader.exec_module(mod)
             except Exception:
@@ -127,6 +159,13 @@ class ServiceRegistry:
                     module_file,
                 )
                 return False
+            finally:
+                # Restore previous _sdk state.
+                if _sdk_installed:
+                    if prev_sdk is not None:
+                        sys.modules["_sdk"] = prev_sdk
+                    else:
+                        sys.modules.pop("_sdk", None)
 
         handler = getattr(mod, func_name, None)
         if handler is None:
