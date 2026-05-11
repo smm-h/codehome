@@ -190,6 +190,24 @@ def load_all_plugins(root: Path | None = None) -> tuple[int, list[str]]:
     registry.clear()
     _installed_subscriptions.clear()
 
+    # 5b. Build a deferred service index from manifests so that
+    # cross-plugin services are lazily resolved on first access.
+    from codehome.state.service_registry import services as _svc_registry
+
+    svc_index: dict[str, tuple[Path, str, str, str]] = {}
+    for plugin_dir, manifest in ordered:
+        if not new_state["plugins"].get(manifest.name, {}).get("enabled", False):
+            continue
+        for svc_decl in manifest.services:
+            svc_index[svc_decl.name] = (
+                plugin_dir,
+                svc_decl.handler,
+                manifest.name,
+                svc_decl.description,
+            )
+    if svc_index:
+        _svc_registry.set_deferred_services(svc_index)
+
     loaded = 0
     for plugin_dir, manifest in ordered:
         name = manifest.name

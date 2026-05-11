@@ -61,6 +61,25 @@ def _register_plugin_commands(
     state = {"plugins": {m.name: {"enabled": m.enabled} for _, m in result.plugins}}
     _mount_plugin_namespaces(result.plugins, state, errors)
 
+    # Build a deferred service index from plugin manifests so that
+    # cross-plugin services are lazily resolved on first access
+    # (without importing any plugin Python at startup).
+    from codehome.state.service_registry import services as _svc_registry
+
+    svc_index: dict[str, tuple[object, str, str, str]] = {}
+    for plugin_dir, manifest in result.plugins:
+        if not manifest.enabled:
+            continue
+        for svc_decl in manifest.services:
+            svc_index[svc_decl.name] = (
+                plugin_dir,
+                svc_decl.handler,
+                manifest.name,
+                svc_decl.description,
+            )
+    if svc_index:
+        _svc_registry.set_deferred_services(svc_index)
+
     # Snapshot core command names so we can reject plugin collisions.
     core_commands = set(sub.choices) if hasattr(sub, "choices") else set()
 
