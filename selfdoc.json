@@ -1,0 +1,8 @@
+{
+  "language": "python",
+  "source": ["src/codehome/"],
+  "deploy": {
+    "provider": "cloudflare-pages",
+    "project": "codehome"
+  }
+}

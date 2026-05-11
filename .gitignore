@@ -16,3 +16,7 @@ dist/
 uv.lock
 .codehome/
 .supervisor/
+
+# selfdoc / Cloudflare
+docs/_build/
+.wrangler/
