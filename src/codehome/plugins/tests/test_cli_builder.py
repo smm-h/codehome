@@ -407,6 +407,78 @@ class TestLazyHandler:
         # Same object -- not re-imported.
         assert resolved_first is resolved_second
 
+    def test_handler_importing_from_sdk(self, tmp_path: Path) -> None:
+        """LazyHandler sets up _sdk so handler modules can ``from _sdk import ...``."""
+        plugin_dir = tmp_path / "sdk_plugin"
+        plugin_dir.mkdir()
+        (plugin_dir / "_sdk.py").write_text(
+            "MAGIC = 42\n"
+        )
+        (plugin_dir / "handlers.py").write_text(
+            "from _sdk import MAGIC\n"
+            "def cmd_use_sdk(args):\n"
+            "    args._magic = MAGIC\n"
+        )
+
+        handler = LazyHandler(plugin_dir, "cmd_use_sdk")
+        args = argparse.Namespace()
+        handler(args)
+
+        assert args._magic == 42
+
+    def test_sdk_cleaned_up_after_import(self, tmp_path: Path) -> None:
+        """_sdk is removed from sys.modules after the handler import completes."""
+        plugin_dir = tmp_path / "sdk_cleanup"
+        plugin_dir.mkdir()
+        (plugin_dir / "_sdk.py").write_text("VAL = 1\n")
+        (plugin_dir / "handlers.py").write_text(
+            "from _sdk import VAL\n"
+            "def cmd_val(args):\n"
+            "    args._val = VAL\n"
+        )
+
+        # Ensure _sdk is not in sys.modules before the test.
+        prev = sys.modules.pop("_sdk", None)
+        try:
+            handler = LazyHandler(plugin_dir, "cmd_val")
+            handler(argparse.Namespace())
+
+            # After import, _sdk should not be left in sys.modules.
+            assert "_sdk" not in sys.modules
+        finally:
+            # Restore if there was a previous value.
+            if prev is not None:
+                sys.modules["_sdk"] = prev
+
+    def test_sdk_previous_value_restored(self, tmp_path: Path) -> None:
+        """If _sdk was already in sys.modules, it is restored after import."""
+        import types
+
+        plugin_dir = tmp_path / "sdk_restore"
+        plugin_dir.mkdir()
+        (plugin_dir / "_sdk.py").write_text("X = 'plugin'\n")
+        (plugin_dir / "handlers.py").write_text(
+            "from _sdk import X\n"
+            "def cmd_x(args):\n"
+            "    args._x = X\n"
+        )
+
+        sentinel = types.ModuleType("_sdk")
+        sentinel.SENTINEL = True  # type: ignore[attr-defined]
+        sys.modules["_sdk"] = sentinel
+        try:
+            handler = LazyHandler(plugin_dir, "cmd_x")
+            args = argparse.Namespace()
+            handler(args)
+
+            assert args._x == "plugin"
+            # The previous _sdk module should be restored.
+            assert sys.modules["_sdk"] is sentinel
+        finally:
+            # Clean up.
+            if sys.modules.get("_sdk") is sentinel:
+                del sys.modules["_sdk"]
+
 
 # ===========================================================================
 # 6. Template includes in parser
