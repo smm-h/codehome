@@ -6,39 +6,22 @@ from pathlib import Path
 import pytest
 
 import codehome.serve.test_runner as test_runner_mod
-from codehome.state.service_registry import services
 
 discover_suites = test_runner_mod.discover_suites
 _load_json = test_runner_mod._load_json
 
 
-class _FakeLayout:
-    """Minimal ProjectLayout stub for testing."""
-
-    def __init__(self, repo_root: Path, branches: Path) -> None:
-        self._repo_root = repo_root
-        self._branches = branches
-
-    def repo_dir(self, repo: str) -> Path:
-        return self._repo_root
-
-    def repo_branches(self, repo: str) -> Path:
-        return self._branches
-
-
 @pytest.fixture()
-def _register_layout(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
-    """Register a FakeLayout in the service registry for the test's tmp_path.
+def _register_layout(_register_minimal_layout):
+    """Adapter: exposes (repo_root, branches_dir) from the shared MinimalLayout.
 
-    Yields (repo_root, branches_dir) so tests can populate them.
-    The fixture tears down the registration after the test.
+    The conftest autouse fixture already registers core.layout; this just
+    provides the directories that test_runner discovery tests populate.
     """
-    branches_dir = tmp_path / "branches"
-    branches_dir.mkdir(exist_ok=True)
-    layout = _FakeLayout(tmp_path, branches_dir)
-    services.register("core.layout", layout, plugin="test", description="test layout")
-    yield tmp_path, branches_dir
-    services.clear()
+    layout = _register_minimal_layout
+    repo_root = layout.repo_dir("bag")
+    branches_dir = layout.repo_branches("bag")
+    yield repo_root, branches_dir
 
 
 # ---------------------------------------------------------------------------
