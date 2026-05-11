@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.1
+
+### Added
+
+- Declarative services: plugins declare `[[services]]` in plugin.toml; the framework lazily imports handlers on first access
+
+### Fixed
+
+- Plugin handler imports no longer crash when the handler does `from _sdk import ...`
+
 ## 0.2.0
 
 ### Added
