@@ -30,7 +30,6 @@ class LoadedPlugin:
 
     Attributes:
         name: Unique plugin identifier (matches directory name).
-        version: SemVer string from the plugin manifest.
         description: Human-readable summary of what the plugin does.
         plugin_dir: Absolute path to the plugin's directory on disk.
         manifest: The parsed PluginManifest instance.
@@ -40,7 +39,6 @@ class LoadedPlugin:
     """
 
     name: str
-    version: str
     description: str
     plugin_dir: str
     manifest: PluginManifest

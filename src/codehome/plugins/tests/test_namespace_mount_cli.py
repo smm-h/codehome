@@ -39,7 +39,6 @@ def _make_plugin_with_namespace(
 
     manifest = PluginManifest(
         name=name,
-        version="0.1.0",
         description=f"Test plugin {name}",
         namespace=namespace,
         commands=(
@@ -118,7 +117,6 @@ class TestNamespaceMountDuringCLI:
 
         manifest = PluginManifest(
             name="disabled-ns",
-            version="0.1.0",
             description="Disabled plugin",
             enabled=False,
             namespace="disabledns",

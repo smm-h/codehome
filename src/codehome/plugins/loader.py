@@ -326,7 +326,6 @@ def load_all_plugins(root: Path | None = None) -> tuple[int, list[str]]:
         # -- Register the assembled plugin --------------------------------
         loaded_plugin = registry.LoadedPlugin(
             name=name,
-            version=manifest.version,
             description=manifest.description,
             plugin_dir=str(plugin_dir),
             manifest=manifest,

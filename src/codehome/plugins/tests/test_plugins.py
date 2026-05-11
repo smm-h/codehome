@@ -40,11 +40,10 @@ def _write_toml(plugin_dir: Path, content: str) -> None:
     (plugin_dir / "plugin.toml").write_text(content)
 
 
-def _minimal_manifest_toml(name: str = "test-plugin", version: str = "0.1.0") -> str:
+def _minimal_manifest_toml(name: str = "test-plugin") -> str:
     """Return a minimal valid plugin.toml string with one command."""
     return (
         f'name = "{name}"\n'
-        f'version = "{version}"\n'
         f'description = "A test plugin"\n'
         "\n"
         "[[commands]]\n"
@@ -58,19 +57,16 @@ def _make_loaded_plugin(
     name: str,
     *,
     passthrough: bool = False,
-    version: str = "1.0.0",
     description: str = "",
 ) -> LoadedPlugin:
     """Build a LoadedPlugin with a stubbed manifest."""
     manifest = PluginManifest(
         name=name,
-        version=version,
         description=description,
         passthrough=passthrough,
     )
     return LoadedPlugin(
         name=name,
-        version=version,
         description=description,
         plugin_dir="/fake/" + name,
         manifest=manifest,
@@ -99,14 +95,13 @@ class TestManifestParsing:
     """Tests for parse_manifest() and the dataclass types it produces."""
 
     def test_valid_minimal_manifest(self, tmp_path: Path) -> None:
-        """A manifest with just name, version, description, and one command parses OK."""
+        """A manifest with just name, description, and one command parses OK."""
         plugin_dir = tmp_path / "my-plugin"
-        _write_toml(plugin_dir, _minimal_manifest_toml("my-plugin", "1.0.0"))
+        _write_toml(plugin_dir, _minimal_manifest_toml("my-plugin"))
 
         m = parse_manifest(plugin_dir)
 
         assert m.name == "my-plugin"
-        assert m.version == "1.0.0"
         assert m.description == "A test plugin"
         assert m.enabled is True  # default
         assert m.requires == ()
@@ -124,7 +119,6 @@ class TestManifestParsing:
         plugin_dir = tmp_path / "full-plugin"
         toml_content = """\
 name = "full-plugin"
-version = "2.3.1"
 description = "A fully loaded plugin"
 enabled = false
 requires = ["ssh", "mkcert"]
@@ -162,7 +156,6 @@ event_types = ["build-started", "build-finished"]
         m = parse_manifest(plugin_dir)
 
         assert m.name == "full-plugin"
-        assert m.version == "2.3.1"
         assert m.description == "A fully loaded plugin"
         assert m.enabled is False
         assert m.requires == ("ssh", "mkcert")
@@ -213,16 +206,17 @@ event_types = ["build-started", "build-finished"]
         with pytest.raises(ValueError, match="name"):
             parse_manifest(plugin_dir)
 
-    def test_missing_required_field_version(self, tmp_path: Path) -> None:
-        """Omitting the required 'version' field raises ValueError."""
-        plugin_dir = tmp_path / "bad-plugin"
+    def test_version_field_silently_ignored(self, tmp_path: Path) -> None:
+        """A manifest with a version field parses without error (field is ignored)."""
+        plugin_dir = tmp_path / "versioned-plugin"
         _write_toml(
             plugin_dir,
-            'name = "bad"\ndescription = "no version"\n',
+            'name = "versioned"\nversion = "1.0.0"\ndescription = "has version"\n',
         )
 
-        with pytest.raises(ValueError, match="version"):
-            parse_manifest(plugin_dir)
+        m = parse_manifest(plugin_dir)
+        assert m.name == "versioned"
+        assert not hasattr(m, "version")
 
     def test_missing_command_handler_defaults_to_empty(self, tmp_path: Path) -> None:
         """A command entry missing 'handler' gets handler="" (group command)."""
@@ -287,7 +281,6 @@ another_future_section = { nested = true }
         m = parse_manifest(plugin_dir)
 
         assert m.name == "future-plugin"
-        assert m.version == "1.0.0"
         # No error raised, extra keys simply not present on the dataclass.
         assert not hasattr(m, "some_future_key")
 
@@ -353,13 +346,11 @@ class TestStateMerge:
         # Plugin with enabled=True in manifest.
         manifest_enabled = PluginManifest(
             name="new-enabled",
-            version="1.0.0",
             enabled=True,
         )
         # Plugin with enabled=False in manifest.
         manifest_disabled = PluginManifest(
             name="new-disabled",
-            version="1.0.0",
             enabled=False,
         )
 
@@ -387,7 +378,6 @@ class TestStateMerge:
         # Manifest says enabled=True, but the user override should win.
         manifest = PluginManifest(
             name="my-plugin",
-            version="2.0.0",
             enabled=True,
         )
         discovered = [(Path("/fake/my-plugin"), manifest)]
@@ -395,8 +385,6 @@ class TestStateMerge:
         merged = merge_discovered(old_state, discovered)
 
         assert merged["plugins"]["my-plugin"]["enabled"] is False
-        # Metadata should be updated from the manifest.
-        assert merged["plugins"]["my-plugin"]["version"] == "2.0.0"
 
     def test_removed_plugin_pruned(self) -> None:
         """A plugin in state but no longer on disk is pruned from merged state."""
@@ -408,7 +396,7 @@ class TestStateMerge:
             "last_scanned": None,
         }
         # Only "still-here" was discovered on disk.
-        manifest = PluginManifest(name="still-here", version="1.0.0")
+        manifest = PluginManifest(name="still-here")
         discovered = [(Path("/fake/still-here"), manifest)]
 
         merged = merge_discovered(old_state, discovered)
@@ -420,9 +408,9 @@ class TestStateMerge:
         """When old state is empty, all discovered plugins appear with their manifest default."""
         old_state: dict[str, Any] = {"plugins": {}, "last_scanned": None}
         manifests = [
-            PluginManifest(name="alpha", version="1.0.0", enabled=True),
-            PluginManifest(name="beta", version="1.0.0", enabled=True),
-            PluginManifest(name="gamma", version="1.0.0", enabled=True),
+            PluginManifest(name="alpha", enabled=True),
+            PluginManifest(name="beta", enabled=True),
+            PluginManifest(name="gamma", enabled=True),
         ]
         discovered = [(Path(f"/fake/{m.name}"), m) for m in manifests]
 
@@ -435,7 +423,7 @@ class TestStateMerge:
     def test_merge_sets_last_scanned(self) -> None:
         """merge_discovered always populates last_scanned with an ISO timestamp."""
         old_state: dict[str, Any] = {"plugins": {}, "last_scanned": None}
-        manifest = PluginManifest(name="ts-test", version="1.0.0")
+        manifest = PluginManifest(name="ts-test")
         discovered = [(Path("/fake/ts-test"), manifest)]
 
         merged = merge_discovered(old_state, discovered)
@@ -462,7 +450,6 @@ class TestTopologicalSort:
                 Path(f"/fake/{name}"),
                 PluginManifest(
                     name=name,
-                    version="1.0.0",
                     dependencies=tuple(deps),
                 ),
             )
@@ -587,14 +574,13 @@ class TestRegistry:
 
     def test_register_and_get(self) -> None:
         """Register a plugin, retrieve it by name."""
-        plugin = _make_loaded_plugin("my-plugin", version="1.2.3")
+        plugin = _make_loaded_plugin("my-plugin")
 
         registry.register(plugin)
         got = registry.get("my-plugin")
 
         assert got is plugin
         assert got.name == "my-plugin"
-        assert got.version == "1.2.3"
 
     def test_get_unknown_returns_none(self) -> None:
         """get() on an unregistered name returns None."""
@@ -642,15 +628,15 @@ class TestRegistry:
 
     def test_register_overwrites(self) -> None:
         """Registering a plugin with the same name overwrites the previous entry."""
-        v1 = _make_loaded_plugin("overwrite-me", version="1.0.0")
-        v2 = _make_loaded_plugin("overwrite-me", version="2.0.0")
+        v1 = _make_loaded_plugin("overwrite-me", description="first")
+        v2 = _make_loaded_plugin("overwrite-me", description="second")
 
         registry.register(v1)
         registry.register(v2)
 
         got = registry.get("overwrite-me")
         assert got is not None
-        assert got.version == "2.0.0"
+        assert got.description == "second"
         assert len(registry.list_plugins()) == 1
 
 
@@ -761,7 +747,6 @@ class TestLoadAllPlugins:
                 deps_line = f"dependencies = [{deps_list}]\n"
             toml_content = (
                 f'name = "{name}"\n'
-                f'version = "0.1.0"\n'
                 f'description = "Test plugin {name}"\n'
                 f"{deps_line}"
                 "\n"
@@ -799,7 +784,6 @@ class TestLoadAllPlugins:
         plugin = registry.get("hello")
         assert plugin is not None
         assert plugin.name == "hello"
-        assert plugin.version == "0.1.0"
 
         # State file was written.
         state_file = tmp_path / ".codehome" / "plugins-state.json"
@@ -867,7 +851,6 @@ class TestLoadAllPlugins:
         assert "stateful" in state["plugins"]
         entry = state["plugins"]["stateful"]
         assert entry["name"] == "stateful"
-        assert entry["version"] == "0.1.0"
         assert entry["enabled"] is True
 
     def test_no_plugins_returns_zero(self, tmp_path: Path) -> None:
@@ -1122,7 +1105,6 @@ class TestDiscoveryEdgeCases:
 
         manifest = PluginManifest(
             name="needs-stuff",
-            version="0.1.0",
             description="",
             requires=("nonexistent_binary_xyz_999",),
         )
@@ -1138,7 +1120,6 @@ class TestDiscoveryEdgeCases:
         # 'git' should be on PATH in any dev environment.
         manifest = PluginManifest(
             name="needs-git",
-            version="0.1.0",
             description="",
             requires=("git",),
         )
@@ -1153,7 +1134,6 @@ class TestDiscoveryEdgeCases:
 
         manifest = PluginManifest(
             name="no-deps",
-            version="0.1.0",
             description="",
         )
 

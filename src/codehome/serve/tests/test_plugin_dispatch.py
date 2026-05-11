@@ -38,7 +38,6 @@ def _make_plugin(name: str, *, with_router: bool = True) -> LoadedPlugin:
     """Create a test plugin, optionally with a simple router."""
     manifest = PluginManifest(
         name=name,
-        version="0.1.0",
         description="test",
         dashboard=DashboardDecl(group="root", route=f"/{name}") if with_router else None,
     )
@@ -56,7 +55,6 @@ def _make_plugin(name: str, *, with_router: bool = True) -> LoadedPlugin:
 
     return LoadedPlugin(
         name=name,
-        version="0.1.0",
         description="test",
         plugin_dir=f"/fake/{name}",
         manifest=manifest,

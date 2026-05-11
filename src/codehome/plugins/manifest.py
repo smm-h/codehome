@@ -9,7 +9,6 @@ frozen dataclass types that represent a parsed manifest and the
 from __future__ import annotations
 
 import logging
-import re
 import tomllib
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
@@ -181,7 +180,6 @@ class PluginManifest:
 
     Attributes:
         name: Plugin identifier (must be unique across all plugins).
-        version: Semantic version string.
         description: Human-readable summary.
         enabled: Whether the plugin is active (can be overridden by state).
         requires: System-level dependencies (e.g. ``ssh``, ``mkcert``).
@@ -198,7 +196,6 @@ class PluginManifest:
     """
 
     name: str
-    version: str
     description: str = ""
     enabled: bool = True
     requires: tuple[str, ...] = ()
@@ -415,10 +412,6 @@ def parse_manifest(plugin_dir: Path) -> PluginManifest:
 
     # Required top-level fields.
     name = _require(data, "name", path)
-    version = _require(data, "version", path)
-
-    if not re.fullmatch(r"\d+\.\d+\.\d+", version):
-        logger.warning("%s: version '%s' is not semantic (expected X.Y.Z)", path, version)
 
     # Optional top-level fields.
     description = data.get("description", "")
@@ -458,7 +451,6 @@ def parse_manifest(plugin_dir: Path) -> PluginManifest:
 
     return PluginManifest(
         name=name,
-        version=version,
         description=description,
         enabled=enabled,
         requires=requires,

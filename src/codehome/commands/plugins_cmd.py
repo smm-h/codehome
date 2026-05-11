@@ -84,7 +84,7 @@ def _cmd_rescan(args: argparse.Namespace) -> None:
         print()
         for _plugin_dir, manifest in result.plugins:
             toggle = "on" if new_state["plugins"][manifest.name].get("enabled", True) else "off"
-            print(f"  [{toggle:>3}] {manifest.name} v{manifest.version} -- {manifest.description}")
+            print(f"  [{toggle:>3}] {manifest.name} -- {manifest.description}")
 
     if result.errors:
         print()
@@ -123,10 +123,9 @@ def _cmd_list(args: argparse.Namespace) -> None:
 
     for name, info in sorted(plugins.items()):
         toggle = "on" if info.get("enabled", True) else "off"
-        version = info.get("version", "?")
         desc = info.get("description", "")
         desc_suffix = f" -- {desc}" if desc else ""
-        print(f"  [{toggle:>3}] {name} v{version}{desc_suffix}")
+        print(f"  [{toggle:>3}] {name}{desc_suffix}")
 
 
 def _cmd_enable(args: argparse.Namespace) -> None:

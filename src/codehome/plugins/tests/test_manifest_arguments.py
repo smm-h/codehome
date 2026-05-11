@@ -33,9 +33,9 @@ def _write_toml(plugin_dir: Path, content: str) -> None:
     (plugin_dir / "plugin.toml").write_text(content)
 
 
-def _header(name: str = "arg-test", version: str = "0.1.0") -> str:
+def _header(name: str = "arg-test") -> str:
     """Return a minimal manifest header."""
-    return f'name = "{name}"\nversion = "{version}"\n\n'
+    return f'name = "{name}"\n\n'
 
 
 # ===========================================================================
@@ -675,7 +675,7 @@ class TestRoundTrip:
         """Parse a TOML with commands, arguments, subcommands, includes."""
         plugin_dir = tmp_path / "roundtrip"
         toml = (
-            _header("roundtrip-plugin", "1.2.3")
+            _header("roundtrip-plugin")
             + '[[commands]]\n'
             'name = "build"\n'
             'handler = "handle_build"\n'
@@ -721,7 +721,6 @@ class TestRoundTrip:
 
         # Top-level: two commands.
         assert m.name == "roundtrip-plugin"
-        assert m.version == "1.2.3"
         assert len(m.commands) == 2
 
         # First command: build.

@@ -69,7 +69,6 @@ def merge_discovered(
 
         new_plugins[manifest.name] = {
             "name": manifest.name,
-            "version": manifest.version,
             "description": manifest.description,
             "enabled": enabled,
             "plugin_dir": str(plugin_dir),

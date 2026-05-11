@@ -31,7 +31,6 @@ async def list_plugins() -> list[dict[str, Any]]:
         manifest = plugin.manifest
         entry: dict[str, Any] = {
             "name": plugin.name,
-            "version": plugin.version,
             "description": plugin.description,
             "has_dashboard": manifest.dashboard is not None,
             "has_cli": bool(plugin.manifest.commands),
@@ -63,7 +62,6 @@ async def get_plugin(name: str) -> dict[str, Any]:
     manifest = plugin.manifest
     response: dict[str, Any] = {
         "name": plugin.name,
-        "version": plugin.version,
         "description": plugin.description,
         "has_dashboard": manifest.dashboard is not None,
         "has_cli": bool(plugin.manifest.commands),
