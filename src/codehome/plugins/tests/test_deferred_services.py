@@ -11,6 +11,7 @@ Covers:
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
@@ -185,6 +186,27 @@ class TestDeferredWithModuleRef:
 
 class TestDeferredSdkImport:
     """Deferred services whose handler module imports from _sdk."""
+
+    @pytest.fixture(autouse=True)
+    def _clean_sdk_modules(self) -> Iterator[None]:
+        """Remove cached _plugin_*__sdk entries from sys.modules between tests.
+
+        The deferred resolver caches SDK modules under ``_plugin_{name}__sdk``.
+        If a prior test (even in another file) loaded a plugin with the same
+        name but different _sdk.py contents, the stale module is reused,
+        causing ImportError.  Cleaning before and after each test prevents
+        cross-test pollution regardless of execution order.
+        """
+        import sys
+
+        def _purge_sdk_entries() -> None:
+            to_remove = [k for k in sys.modules if k.startswith("_plugin_") and k.endswith("__sdk")]
+            for k in to_remove:
+                del sys.modules[k]
+
+        _purge_sdk_entries()
+        yield
+        _purge_sdk_entries()
 
     def test_handler_importing_sdk_resolves(self, tmp_path: Path) -> None:
         """A handler that does ``from _sdk import ...`` should work."""
