@@ -17,3 +17,29 @@
 paths = [
     "~/Work/super/plugins",
 ]
+
+# -------------------------------------------------------------------------
+# Argument templates
+# -------------------------------------------------------------------------
+# Templates are named groups of CLI arguments that plugins can pull in via
+# `includes = ["branch"]` in their plugin.toml manifest. Three built-in
+# templates ship with codehome: branch, dry-run, and deploy-flags.
+#
+# You can override a built-in (same name replaces it entirely) or define
+# new templates here. Templates may include other templates; circular
+# includes are rejected.
+#
+# [arg-templates.my-template]
+# includes = ["branch"]           # optional: pull in other templates
+#
+# [[arg-templates.my-template.arguments]]
+# name = "--verbose"
+# short = "-v"
+# help = "enable verbose output"
+# action = "store_true"
+#
+# [[arg-templates.my-template.arguments]]
+# name = "--output"
+# short = "-o"
+# help = "output file path"
+# metavar = "PATH"
