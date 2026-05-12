@@ -303,6 +303,11 @@ def build_commands(
         # Set _cmd default.
         if cmd.handler:
             parser.set_defaults(_cmd=LazyHandler(plugin_dir, cmd.handler))
-        else:
-            # Group command with no handler: print help.
+        elif cmd.subcommands:
+            # Group command with subcommands but no handler: print help
+            # when invoked without a subcommand.
             parser.set_defaults(_cmd=_print_help_handler(parser))
+        # else: leaf subcommand with no handler -- do NOT set _cmd here.
+        # The parent command's handler dispatches based on the subcommand
+        # name.  Setting _cmd would override the parent's _cmd in
+        # argparse's namespace and prevent the parent handler from running.
