@@ -4,32 +4,22 @@ Plugin runtime for dev tools: server, auth, event bus, check framework, and SDK
 
 ## API Reference
 
-:::module codehome
-:::
+:-: ref path="codehome"
 
-:::module codehome.bus
-:::
+:-: ref path="codehome.bus"
 
-:::module codehome.checks
-:::
+:-: ref path="codehome.checks"
 
-:::module codehome.commands
-:::
+:-: ref path="codehome.commands"
 
-:::module codehome.conductor
-:::
+:-: ref path="codehome.conductor"
 
-:::module codehome.mcp
-:::
+:-: ref path="codehome.mcp"
 
-:::module codehome.plugins
-:::
+:-: ref path="codehome.plugins"
 
-:::module codehome.serve
-:::
+:-: ref path="codehome.serve"
 
-:::module codehome.shared
-:::
+:-: ref path="codehome.shared"
 
-:::module codehome.state
-:::
+:-: ref path="codehome.state"
