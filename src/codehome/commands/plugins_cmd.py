@@ -198,7 +198,7 @@ def _set_enabled(args: argparse.Namespace, *, enabled: bool) -> None:
 # ---------------------------------------------------------------------------
 
 # Default git remote URL for fetching plugins when plugin-store/ is not local.
-_DEFAULT_STORE_REPO = "git@gp:smm-h/codehome.git"
+_DEFAULT_STORE_REPO = "git@gw:GreenCapitals/codehome.git"
 
 
 def _cmd_install(args: argparse.Namespace) -> None:
@@ -274,7 +274,7 @@ def _fetch_remote_index() -> dict[str, Any] | None:
     import urllib.request
     import urllib.error
 
-    url = "https://raw.githubusercontent.com/smm-h/codehome/main/plugin-store/index.toml"
+    url = "https://raw.githubusercontent.com/GreenCapitals/codehome/main/plugin-store/index.toml"
     try:
         with urllib.request.urlopen(url, timeout=10) as resp:
             raw = resp.read()
