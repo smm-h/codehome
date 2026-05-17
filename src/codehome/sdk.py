@@ -189,12 +189,29 @@ def load_sibling(name: str, caller_file: str, *, cache: bool = False) -> types.M
     # class creation, which fails with AttributeError if the module isn't
     # registered yet.
     sys.modules[module_name] = mod
+
+    # Temporarily install the plugin's _sdk.py so ``from _sdk import ...``
+    # works inside sibling modules, mirroring cli_builder.py's pattern.
+    sdk_spec_name = f"_plugin_{directory.name}__sdk"
+    prev_sdk = sys.modules.get("_sdk")
+    _sdk_installed = False
+    sdk_mod = sys.modules.get(sdk_spec_name)
+    if sdk_mod is not None:
+        sys.modules["_sdk"] = sdk_mod
+        _sdk_installed = True
+
     try:
         spec.loader.exec_module(mod)
     except Exception:
         # On failure, don't leave a broken module in sys.modules.
         sys.modules.pop(module_name, None)
         raise
+    finally:
+        if _sdk_installed:
+            if prev_sdk is not None:
+                sys.modules["_sdk"] = prev_sdk
+            else:
+                sys.modules.pop("_sdk", None)
     if not cache:
         # Non-cached modules can still be found by name if needed, but
         # remove them to avoid accumulating stale refs on repeated loads.
