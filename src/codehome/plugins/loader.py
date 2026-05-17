@@ -246,6 +246,7 @@ def load_all_plugins(root: Path | None = None) -> tuple[int, list[str]]:
                     errors.append(f"plugin '{name}': failed to load _sdk.py: {exc}")
                     _sdk_failed = True
                 else:
+                    sys.modules[f"_plugin_{name}__sdk"] = sdk_mod
                     _sdk_loaded = True
 
         if _sdk_failed:
