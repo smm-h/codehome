@@ -7,13 +7,14 @@ Wraps wesktop's auth module to add codehome-specific behavior:
 
 During the hybrid migration phase, these functions are used both as
 FastAPI Depends() targets and as wesktop DI factories (both receive
-a request object as the first argument).
+a request object as the first argument). The ``request`` parameter
+is typed as ``Any`` to accept both Starlette and wesktop Request
+objects without importing either.
 """
 
 import logging
 from typing import Any
 
-from starlette.requests import Request
 from wesktop.asgi import HTTPError
 from wesktop.auth import verify_token
 
@@ -23,7 +24,7 @@ from codehome.serve.error_tracking import set_user_context
 log = logging.getLogger(__name__)
 
 
-async def get_current_user(request: Request) -> dict[str, str]:  # type: ignore[override]
+async def get_current_user(request: Any) -> dict[str, str]:
     """Extract and validate JWT from Authorization header, session cookie, query param, or CLI token file.
 
     Token resolution order:
@@ -97,7 +98,7 @@ async def get_current_user(request: Request) -> dict[str, str]:  # type: ignore[
     return claims
 
 
-async def require_admin(request: Request) -> dict[str, str]:  # type: ignore[override]
+async def require_admin(request: Any) -> dict[str, str]:
     """Dependency that ensures the current user has the admin role.
 
     Works as both a FastAPI Depends() target and a wesktop DI factory.

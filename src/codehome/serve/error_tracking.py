@@ -37,7 +37,8 @@ def _before_send(event: dict[str, object], hint: dict[str, object]) -> dict[str,
         if isinstance(exc_value, HTTPError) and 400 <= exc_value.status_code < 500:
             return None
 
-        # FastAPI/Starlette HTTP exceptions with 4xx status codes (hybrid phase).
+        # FastAPI/Starlette HTTP exceptions with 4xx status codes.
+        # Kept for plugin routes that still use FastAPI (Phase 10 removes this).
         try:
             from starlette.exceptions import HTTPException
 
