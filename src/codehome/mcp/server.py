@@ -21,9 +21,9 @@ from typing import Any
 
 from mcp.server.fastmcp import FastMCP
 
-from codehome.mcp.roles import DEFAULT_ROLE, ROLES
-from codehome.mcp.tools import ask_user as ask_user_mod
-from codehome.mcp.tools import deployment, filesystem, git, review, testing
+from wesktop.mcp import DEFAULT_ROLE, ROLES
+from wesktop.mcp_tools import ask_user as ask_user_mod
+from wesktop.mcp_tools import deployment, filesystem, git, review, testing
 
 # -- Read environment -----------------------------------------------------------
 
