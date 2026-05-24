@@ -1,5 +1,0 @@
-{"commits":["893f035c88c316f95cb6db8efdc82ee54d1a78d8"],"user_facing":true,"description":"**Fix.** Remove dead rate_limit.py module.","type":"fix"}
-{"commits":["f6a6876553131f3a33f84ff4cc1425bfe1e6f48c"],"user_facing":true,"description":"**Fix.** Remove unused CSRFMiddleware re-export.","type":"fix"}
-{"commits":["4391e8d3eff763c5fccdc994f9d7a8223b9b2920"],"user_facing":true,"description":"**Fix.** Simplify middleware proxy: replace classes with accessor functions.","type":"fix"}
-{"commits":["9816b32c8275fa656598c3c7d471c66de7e82227"],"user_facing":false}
-{"commits":["796d1bf722a4e5f157b24441a79ace77273be08e"],"user_facing":false}
