@@ -7,7 +7,7 @@ in Phase 4.
 Provides: paths (core), formatting, events (bus), credentials,
 state (Config/State/Files), services (RPC), locking, CLI helpers,
 subprocesses, notifications, background tasks, SDUI commands,
-and FastAPI auth dependencies.
+and auth dependencies.
 
 All re-exports are lazy: modules are only imported when the symbol is
 first accessed, via module-level __getattr__ with globals() caching.
@@ -94,7 +94,7 @@ _LAZY_IMPORTS: dict[str, tuple[str, str | None]] = {
     "notification_registry": ("codehome.serve.notifications", "notification_registry"),
     # -- Serve --
     "read_server_url": ("codehome.serve", "read_server_url"),
-    # -- FastAPI auth dependencies (for plugin routes) --
+    # -- Auth dependencies (for plugin routes) --
     "get_current_user": ("codehome.serve.auth_deps", "get_current_user"),
     "get_gh_token": ("codehome.serve.dependencies", "get_gh_token"),
     # -- SDUI streaming command types + CLI runner --
