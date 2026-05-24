@@ -8,19 +8,16 @@ import asyncio
 import mimetypes
 import time
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field
-from starlette.requests import Request
+from wesktop import Router, HTTPError, Request, JSONResponse, FileResponse
 
 from codehome.serve.dependencies import get_error_log, get_event_manager
 from codehome.serve.error_log import ErrorLog
 from codehome.serve.events import EventManager
-from codehome.serve.rate_limit import limiter
 
 # -- Public diagnostics (no auth) ------------------------------------------
 
-public_router = APIRouter()
+public_router = Router()
 
 
 class _DiagnosticError(BaseModel):
@@ -37,13 +34,13 @@ class _DiagnosticErrorsPayload(BaseModel):
 
 
 @public_router.post("/api/diagnostics/errors")
-@limiter.limit("10/minute")  # type: ignore[untyped-decorator]
-async def post_diagnostic_errors(
-    payload: _DiagnosticErrorsPayload,
-    request: Request,
-    error_log: ErrorLog = Depends(get_error_log),
-) -> object:
-    """Accept frontend error reports (public, no auth required)."""
+async def post_diagnostic_errors(request: Request) -> object:
+    """Accept frontend error reports (public, no auth required).
+
+    Rate limiting is handled at the wesktop level (not via slowapi decorator).
+    """
+    payload = request.json_as(_DiagnosticErrorsPayload)
+    error_log: ErrorLog = get_error_log(request)
     for entry in payload.errors[:10]:
         await asyncio.to_thread(
             error_log.log,
@@ -57,7 +54,7 @@ async def post_diagnostic_errors(
 
 
 @public_router.get("/api/health")
-async def health_check() -> object:
+async def health_check(request: Request) -> object:
     """Public health endpoint for uptime monitoring.
 
     Returns server status information and HTTP 200 if healthy,
@@ -66,7 +63,7 @@ async def health_check() -> object:
     from codehome.serve.system import build_health_status
 
     result = await build_health_status()
-    return JSONResponse(content=result["body"], status_code=result["status_code"])
+    return JSONResponse(result["body"], status=result["status_code"])
 
 
 # -- Branding logo (public GET) --------------------------------------------
@@ -82,22 +79,23 @@ _LOGO_MAX_BYTES = 1 * 1024 * 1024  # 1 MB
 
 
 @public_router.get("/api/branding/logo")
-async def get_branding_logo() -> FileResponse:
+async def get_branding_logo(request: Request) -> FileResponse:
     """Serve the stored logo file (public, no auth)."""
     from codehome.serve.system import find_logo
 
     logo = await asyncio.to_thread(find_logo)
     if logo is None:
-        raise HTTPException(status_code=404, detail="No logo uploaded")
+        raise HTTPError(404, "No logo uploaded")
     content_type = mimetypes.guess_type(str(logo))[0] or "application/octet-stream"
-    return FileResponse(path=str(logo), media_type=content_type)
+    return FileResponse(path=str(logo), content_type=content_type)
 
 
 @public_router.get("/api/server/info")
-async def server_info(events: EventManager = Depends(get_event_manager)) -> object:
+async def server_info(request: Request) -> object:
     """Return server uptime and connected client count."""
     from codehome.serve.server import _server_start_time
 
+    events: EventManager = get_event_manager(request)
     return {
         "uptime": time.time() - _server_start_time,
         "clients": events.client_count,
