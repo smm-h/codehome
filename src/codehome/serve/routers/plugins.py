@@ -134,9 +134,9 @@ async def dispatch_command(request: Request) -> dict[str, Any]:
 
     # Resolve dependencies and build kwargs for the endpoint call.
     # Plugin endpoints commonly use:
-    #   - events: EventManager = Depends(get_event_manager)  (telemac)
-    #   - Pydantic BaseModel body parameters                 (tdd)
-    # We resolve these from the request context.
+    #   - events: EventManager  (resolved from app.state via wesktop)
+    #   - Pydantic BaseModel body parameters
+    # We inspect the handler signature and resolve each from the request context.
     sig = inspect.signature(endpoint_fn)
     kwargs: dict[str, Any] = {}
     params = payload.get("params", {})
