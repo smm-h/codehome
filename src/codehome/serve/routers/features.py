@@ -1,33 +1,35 @@
 """Feature flag API routes."""
 
-from fastapi import APIRouter, Body
+from wesktop import Router, HTTPError, Request
 
 from codehome.bus import Event
 from codehome.bus import fire as bus_fire
 from codehome.features import DEFAULTS, _write_overrides, all_flags, reload
 
-router = APIRouter(prefix="/api/features", tags=["features"])
-authed_router = APIRouter(prefix="/api/features", tags=["features"])
+router = Router()
+authed_router = Router()
 
 
-@router.get("")
-async def get_flags() -> dict[str, bool]:
+@router.get("/api/features")
+async def get_flags(request: Request) -> dict[str, bool]:
     return all_flags()
 
 
-@authed_router.post("/reload")
-async def reload_flags() -> dict[str, bool]:
+@authed_router.post("/api/features/reload")
+async def reload_flags(request: Request) -> dict[str, bool]:
     reload()
     return all_flags()
 
 
-@authed_router.put("")
-async def update_flags(body: dict[str, bool] = Body()) -> dict[str, bool]:
+@authed_router.put("/api/features")
+async def update_flags(request: Request) -> dict[str, bool]:
     """Partial-update feature flag overrides.
 
     Only keys present in DEFAULTS are accepted; unknown keys are ignored.
     The incoming values are merged into the existing overrides file.
     """
+    body: dict[str, bool] = request.json or {}
+
     # Read current overrides from disk (or empty dict if missing/malformed).
     from codehome.features import _load_overrides
 
