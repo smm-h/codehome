@@ -7,24 +7,23 @@ import re
 from collections.abc import AsyncIterator
 from typing import Any
 
-from fastapi import APIRouter, Body, HTTPException, Request
 from pydantic import BaseModel
-from starlette.responses import StreamingResponse
+from wesktop import Router, HTTPError, Request, StreamResponse
 
 from codehome.plugins import registry
 from codehome.serve.sdui.commands import CommandError
 from codehome.serve.sdui_providers import _SDUI_PROVIDERS
 from codehome.state.service_registry import services
 
-router = APIRouter(prefix="/api/plugins", tags=["plugins"])
+router = Router()
 
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
 
 
-@router.get("")
-async def list_plugins() -> list[dict[str, Any]]:
+@router.get("/api/plugins")
+async def list_plugins(request: Request) -> list[dict[str, Any]]:
     """Return metadata for all loaded plugins."""
     result = []
     for plugin in registry.list_plugins():
@@ -48,17 +47,18 @@ async def list_plugins() -> list[dict[str, Any]]:
     return result
 
 
-@router.get("/{name}")
-async def get_plugin(name: str) -> dict[str, Any]:
+@router.get("/api/plugins/{name}")
+async def get_plugin(request: Request) -> dict[str, Any]:
     """Return detailed metadata for a single plugin.
 
     When a SDUI provider is registered for the plugin, the response
     includes ``ui`` (SDUINode tree) and ``state`` (initial state dict)
     so the frontend can render a server-driven layout.
     """
+    name = request.path_params["name"]
     plugin = registry.get(name)
     if plugin is None:
-        raise HTTPException(status_code=404, detail=f"Plugin '{name}' not found")
+        raise HTTPError(404, f"Plugin '{name}' not found")
     manifest = plugin.manifest
     response: dict[str, Any] = {
         "name": plugin.name,
@@ -89,12 +89,8 @@ async def get_plugin(name: str) -> dict[str, Any]:
     return response
 
 
-@router.post("/{name}/command")
-async def dispatch_command(
-    name: str,
-    request: Request,
-    payload: dict[str, Any] = Body(...),
-) -> dict[str, Any]:
+@router.post("/api/plugins/{name}/command")
+async def dispatch_command(request: Request) -> dict[str, Any]:
     """Dispatch a SDUI button command to the plugin's own API.
 
     The command name maps 1:1 to a POST endpoint on the plugin's router.
@@ -102,20 +98,24 @@ async def dispatch_command(
     matching route on the plugin's ``APIRouter`` and call the endpoint
     function directly, resolving FastAPI dependencies manually.
     """
+    name = request.path_params["name"]
+    payload: dict[str, Any] = request.json or {}
+
     plugin = registry.get(name)
     if plugin is None:
-        raise HTTPException(status_code=404, detail=f"Plugin '{name}' not found")
+        raise HTTPError(404, f"Plugin '{name}' not found")
     if plugin.router is None:
-        raise HTTPException(status_code=400, detail=f"Plugin '{name}' has no routes")
+        raise HTTPError(400, f"Plugin '{name}' has no routes")
 
     command = payload.get("command", "")
     if not command:
-        raise HTTPException(status_code=400, detail="Missing 'command' in payload")
+        raise HTTPError(400, "Missing 'command' in payload")
     # Prevent path traversal: only allow safe command names.
     if not re.fullmatch(r"[a-zA-Z0-9_-]+", command):
-        raise HTTPException(status_code=400, detail="Invalid command name")
+        raise HTTPError(400, "Invalid command name")
 
     # Find the matching POST route on the plugin's router.
+    # Plugin routers are still FastAPI APIRouters during the migration.
     target_path = f"/{command}"
     endpoint_fn = None
     for route in plugin.router.routes:
@@ -128,7 +128,7 @@ async def dispatch_command(
             break
 
     if endpoint_fn is None:
-        raise HTTPException(status_code=404, detail=f"Command '{command}' not found on plugin '{name}'")
+        raise HTTPError(404, f"Command '{command}' not found on plugin '{name}'")
 
     # Resolve dependencies and build kwargs for the endpoint call.
     # Plugin endpoints commonly use:
@@ -150,7 +150,7 @@ async def dispatch_command(
             try:
                 kwargs[param_name] = param.annotation(**params)
             except Exception as exc:
-                raise HTTPException(status_code=422, detail=str(exc)) from None
+                raise HTTPError(422, str(exc)) from None
         # Plain parameters matching keys in params (primitive args).
         elif param_name in params:
             kwargs[param_name] = params[param_name]
@@ -169,8 +169,8 @@ async def dispatch_command(
     return {"status": "ok"}
 
 
-@router.post("/{name}/commands/{command}")
-async def stream_command(name: str, command: str, request: Request) -> StreamingResponse:
+@router.post("/api/plugins/{name}/commands/{command}")
+async def stream_command(request: Request) -> StreamResponse:
     """Execute a plugin streaming command and return progress/result as SSE.
 
     Streaming commands are registered in the service registry with the
@@ -178,23 +178,23 @@ async def stream_command(name: str, command: str, request: Request) -> Streaming
     async generator yielding CommandProgress / CommandResult / CommandError
     instances.
     """
+    name = request.path_params["name"]
+    command = request.path_params["command"]
+
     plugin = registry.get(name)
     if plugin is None:
-        raise HTTPException(status_code=404, detail=f"Plugin '{name}' not found")
+        raise HTTPError(404, f"Plugin '{name}' not found")
 
     # Prevent path traversal: only allow safe command names.
     if not re.fullmatch(r"[a-zA-Z0-9_-]+", command):
-        raise HTTPException(status_code=400, detail="Invalid command name")
+        raise HTTPError(400, "Invalid command name")
 
     service_name = f"{name}.cmd.{command}"
     if not services.has(service_name):
-        raise HTTPException(status_code=404, detail=f"Command '{command}' not found for plugin '{name}'")
+        raise HTTPError(404, f"Command '{command}' not found for plugin '{name}'")
 
     # Parse the request body (may be empty for parameterless commands).
-    try:
-        body = await request.json()
-    except Exception:
-        body = {}
+    body = request.json or {}
 
     handler = services.get_handler(service_name)
 
@@ -210,7 +210,7 @@ async def stream_command(name: str, command: str, request: Request) -> Streaming
     # Audit log the streaming command dispatch.
     _audit_log(request, name, command, body)
 
-    return StreamingResponse(event_stream(), media_type="text/event-stream")
+    return StreamResponse(event_stream(), content_type="text/event-stream")
 
 
 def _is_event_manager(annotation: object) -> bool:
@@ -230,7 +230,7 @@ def _is_pydantic_model(annotation: object) -> bool:
 
 def _audit_log(request: Request, plugin: str, command: str, params: dict[str, Any]) -> None:
     """Record a plugin command dispatch in the error log (severity=info)."""
-    error_log = getattr(request.app.state, "error_log", None)
+    error_log = request.state.get("error_log")
     if error_log is None:
         return
     user = getattr(request.state, "user", None)
