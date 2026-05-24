@@ -199,6 +199,11 @@ def build_parser() -> argparse.ArgumentParser:
     server_sub.add_parser("restart", help="restart the server")
     server_sub.add_parser("check", help="run diagnostic checks on the running server")
 
+    # -- open dashboard (native window or browser) -------------------------------
+    p_open = sub.add_parser("open", help="open the dashboard in a native window or browser")
+    p_open.set_defaults(_cmd=("codehome.commands.open_cmd", "cmd_open"))
+    p_open.add_argument("--browser", action="store_true", help="open in default browser instead of native window")
+
     # -- dynamically registered plugin commands --------------------------------
     plugin_errors, plugin_passthrough = _register_plugin_commands(sub)
     parser._plugin_errors = plugin_errors  # type: ignore[attr-defined]  # expose to main() for warning
