@@ -1,3 +1,0 @@
-{"commits":["9f12b00be8e4fccfa3f095118a07c2b530fde74d"],"user_facing":true,"description":"**Fix.** Updated repository URL from GreenCapitals to smm-h.","type":"fix"}
-{"commits":["25c4bda575ed3e97527f3a02e5b1529a5ef2a0c0"],"user_facing":true,"description":"**Fix.** Fixed test_plugins.py test for PluginManifest version attribute.","type":"fix"}
-{"commits":["16f4e5fed8ceb8e0f84d741eaad0979c1a44b371"],"user_facing":false}
