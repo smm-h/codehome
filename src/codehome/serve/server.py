@@ -21,7 +21,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from wesktop import Router, State, create_app as wesktop_create_app
+from wesktop import AppConfig, Router, State, create_app as wesktop_create_app
 
 from wesktop.middleware import RequestIDMiddleware, RequestTimingMiddleware
 
@@ -405,13 +405,13 @@ _dependency_overrides: dict[Any, Any] = {}
 
 # Create the wesktop ASGI app with lifespan but NO built-in middleware
 # (we apply middleware manually below to control the stack).
-_wesktop_app = wesktop_create_app(
-    _wesktop_router,
+_wesktop_config = AppConfig(
     lifespan=lifespan,
     request_id=False,
     request_timing=False,
     dependency_overrides=_dependency_overrides,
 )
+_wesktop_app = wesktop_create_app(_wesktop_router, config=_wesktop_config)
 
 
 # ---------------------------------------------------------------------------
