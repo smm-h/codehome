@@ -21,7 +21,7 @@ import time
 from collections import deque
 from dataclasses import dataclass, field
 
-from starlette.websockets import WebSocket
+from wesktop import WebSocket
 
 # Lines of output to buffer so a reconnecting client gets recent history.
 SCROLLBACK_SIZE = 5000
