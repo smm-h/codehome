@@ -7,9 +7,8 @@ from collections.abc import AsyncGenerator
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from starlette.responses import JSONResponse, StreamingResponse
+from wesktop import Router, HTTPError, Request, JSONResponse, StreamResponse
 
 from codehome.bus import Event
 from codehome.bus import fire as bus_fire
@@ -35,11 +34,11 @@ from codehome.serve.services import ServiceInstance, ServiceManager, State
 from codehome.serve.templates import load_services_config, resolve_placeholders
 from codehome.serve.test_runner import discover_suites, run_tests, stop_test_run
 
-router = APIRouter()
+router = Router()
 
 # Public (no auth) router -- narrow, port-only surface.  See notes on
 # `/api/ports` below for why this is safe to expose unauthenticated.
-public_router = APIRouter()
+public_router = Router()
 
 _log = logging.getLogger(__name__)
 
@@ -56,8 +55,9 @@ _sse_diag_log: list[dict[str, object]] = []
 
 
 @public_router.post("/api/diagnostics/sse")
-async def sse_diagnostic(body: dict[str, Any]) -> dict[str, str]:
+async def sse_diagnostic(request: Request) -> dict[str, str]:
     """Receive SSE connection diagnostics from the browser. No auth required."""
+    body: dict[str, Any] = request.json or {}
     _sse_diag_log.append(body)
     while len(_sse_diag_log) > 100:
         _sse_diag_log.pop(0)
@@ -66,15 +66,13 @@ async def sse_diagnostic(body: dict[str, Any]) -> dict[str, str]:
 
 
 @public_router.get("/api/diagnostics/sse")
-async def sse_diagnostic_log() -> list[dict[str, object]]:
+async def sse_diagnostic_log(request: Request) -> list[dict[str, object]]:
     """Return collected SSE diagnostics."""
     return _sse_diag_log
 
 
 @public_router.post("/api/services/discover")
-async def trigger_discover_services(
-    services: ServiceManager = Depends(get_service_manager),
-) -> list[dict[str, object]]:
+async def trigger_discover_services(request: Request) -> list[dict[str, object]]:
     """Rescan the Docker daemon for externally-started Compose services.
 
     Unauthenticated by design, same posture as ``/api/ports`` above.  The
@@ -92,12 +90,13 @@ async def trigger_discover_services(
     """
     from codehome.core.ops.discovery import discover_docker
 
+    services: ServiceManager = get_service_manager(request)
     await discover_docker()
     return _collect_vite_ports(services)
 
 
 @public_router.get("/api/ports")
-async def list_vite_ports(services: ServiceManager = Depends(get_service_manager)) -> list[dict[str, object]]:
+async def list_vite_ports(request: Request) -> list[dict[str, object]]:
     """List running Vite ports per (branch, app).  Unauthenticated by design.
 
     This endpoint exists so the DOM inspector (``v inspect``) can resolve
@@ -123,6 +122,7 @@ async def list_vite_ports(services: ServiceManager = Depends(get_service_manager
     excluded from this surface -- this endpoint is port lookup for the
     DOM inspector, not a general service list.
     """
+    services: ServiceManager = get_service_manager(request)
     return _collect_vite_ports(services)
 
 
@@ -168,7 +168,7 @@ def write_vite_ports_state_from_registry() -> None:
     having to patch every state-transition call site individually.
 
     Uses the module-level ``services`` singleton rather than going through
-    FastAPI DI because this runs from event broadcasts, which are outside
+    DI because this runs from event broadcasts, which are outside
     of any request scope.  Atomic-write via tmp + rename so partial writes
     never leave a half-JSON file on disk.
     """
@@ -188,38 +188,41 @@ def write_vite_ports_state_from_registry() -> None:
 
 
 @router.get("/api/services")
-async def list_services(services: ServiceManager = Depends(get_service_manager)) -> object:
+async def list_services(request: Request) -> object:
+    services: ServiceManager = get_service_manager(request)
     return [s.to_dict() for s in services.list_all()]
 
 
 @router.get("/api/services/{key:path}")
-async def get_service(key: str, services: ServiceManager = Depends(get_service_manager)) -> object:
+async def get_service(request: Request) -> object:
+    key = request.path_params["key"]
+    services: ServiceManager = get_service_manager(request)
     svc = services.get(key)
     if not svc:
-        raise HTTPException(status_code=404, detail=f"Service not found: {key}")
+        raise HTTPError(404, f"Service not found: {key}")
     return svc.to_dict()
 
 
 @router.post("/api/services/{key:path}/start")
-async def start_service(
-    key: str,
-    services: ServiceManager = Depends(get_service_manager),
-    events: EventManager = Depends(get_event_manager),
-    ports: PortAllocator = Depends(get_port_allocator),
-    error_log: ErrorLog = Depends(get_error_log),
-) -> JSONResponse:
+async def start_service(request: Request) -> JSONResponse:
+    key = request.path_params["key"]
+    services: ServiceManager = get_service_manager(request)
+    events: EventManager = get_event_manager(request)
+    ports: PortAllocator = get_port_allocator(request)
+    error_log: ErrorLog = get_error_log(request)
+
     svc = services.get(key)
     if not svc:
-        raise HTTPException(status_code=404, detail=f"Service not found: {key}")
+        raise HTTPError(404, f"Service not found: {key}")
 
     # Synchronous validation: check startability without holding the lock.
     can, reason = services.can_start(key)
     if not can:
-        raise HTTPException(status_code=409, detail=reason)
+        raise HTTPError(409, reason)
 
     # Lock check: if another operation is already in progress, reject immediately.
     if svc.lock.locked():
-        raise HTTPException(status_code=409, detail="Operation already in progress for this service")
+        raise HTTPError(409, "Operation already in progress for this service")
 
     # Create tracker before spawning the background task so we have the
     # operation_id to return in the 202 response.
@@ -242,8 +245,8 @@ async def start_service(
 
     asyncio.create_task(_run_start())
     return JSONResponse(
-        status_code=202,
-        content={"operation_id": op.operation_id, "service_key": key},
+        {"operation_id": op.operation_id, "service_key": key},
+        status=202,
     )
 
 
@@ -252,28 +255,28 @@ class StopRequest(BaseModel):
 
 
 @router.post("/api/services/{key:path}/stop")
-async def stop_service(
-    key: str,
-    req: StopRequest,
-    services: ServiceManager = Depends(get_service_manager),
-    events: EventManager = Depends(get_event_manager),
-    ports: PortAllocator = Depends(get_port_allocator),
-    error_log: ErrorLog = Depends(get_error_log),
-) -> JSONResponse:
+async def stop_service(request: Request) -> JSONResponse:
+    key = request.path_params["key"]
+    req = request.json_as(StopRequest)
     force = req.force
+    services: ServiceManager = get_service_manager(request)
+    events: EventManager = get_event_manager(request)
+    ports: PortAllocator = get_port_allocator(request)
+    error_log: ErrorLog = get_error_log(request)
+
     svc = services.get(key)
     if not svc:
-        raise HTTPException(status_code=404, detail=f"Service not found: {key}")
+        raise HTTPError(404, f"Service not found: {key}")
 
     # Synchronous validation: check state before acquiring the lock.
     if not force and svc.state != State.RUNNING:
-        raise HTTPException(status_code=409, detail=f"Service is {svc.state.value}, not running")
+        raise HTTPError(409, f"Service is {svc.state.value}, not running")
     if force and svc.state not in (State.RUNNING, State.FAILED, State.STOPPING, State.STARTING):
-        raise HTTPException(status_code=409, detail=f"Service is {svc.state.value}, nothing to stop")
+        raise HTTPError(409, f"Service is {svc.state.value}, nothing to stop")
 
     # Lock check: if another operation is already in progress, reject immediately.
     if svc.lock.locked():
-        raise HTTPException(status_code=409, detail="Operation already in progress for this service")
+        raise HTTPError(409, "Operation already in progress for this service")
 
     # Create tracker before spawning the background task so we have the
     # operation_id to return in the 202 response.
@@ -295,8 +298,8 @@ async def stop_service(
 
     asyncio.create_task(_run_stop())
     return JSONResponse(
-        status_code=202,
-        content={"operation_id": op.operation_id, "service_key": key},
+        {"operation_id": op.operation_id, "service_key": key},
+        status=202,
     )
 
 
@@ -310,11 +313,11 @@ class RegisterRequest(BaseModel):
 
 
 @router.post("/api/services/register")
-async def register_service(
-    req: RegisterRequest,
-    services: ServiceManager = Depends(get_service_manager),
-    events: EventManager = Depends(get_event_manager),
-) -> object:
+async def register_service(request: Request) -> object:
+    req = request.json_as(RegisterRequest)
+    services: ServiceManager = get_service_manager(request)
+    events: EventManager = get_event_manager(request)
+
     instance = ServiceInstance(
         key=req.key,
         service_type=req.service_type,
@@ -326,36 +329,36 @@ async def register_service(
     try:
         services.register(instance)
     except ValueError as e:
-        raise HTTPException(status_code=409, detail=str(e)) from None
+        raise HTTPError(409, str(e)) from None
     await bus_fire(Event(name="service.state", payload=instance.to_dict()))
     return {"ok": True}
 
 
 @router.post("/api/services/{key:path}/restart")
-async def restart_service(
-    key: str,
-    services: ServiceManager = Depends(get_service_manager),
-    events: EventManager = Depends(get_event_manager),
-    ports: PortAllocator = Depends(get_port_allocator),
-    error_log: ErrorLog = Depends(get_error_log),
-) -> JSONResponse:
+async def restart_service(request: Request) -> JSONResponse:
     """Stop then start a service. Only works on running services.
 
     Returns 202 immediately; the actual stop+start runs in a background task.
     A single lock acquisition covers the state check, stop, and start so
     that no concurrent operation can interfere between phases.
     """
+    key = request.path_params["key"]
+    services: ServiceManager = get_service_manager(request)
+    events: EventManager = get_event_manager(request)
+    ports: PortAllocator = get_port_allocator(request)
+    error_log: ErrorLog = get_error_log(request)
+
     svc = services.get(key)
     if not svc:
-        raise HTTPException(status_code=404, detail=f"Service not found: {key}")
+        raise HTTPError(404, f"Service not found: {key}")
 
     # Synchronous validation: check state before acquiring the lock.
     if svc.state != State.RUNNING:
-        raise HTTPException(status_code=409, detail=f"Service is {svc.state.value}, not running")
+        raise HTTPError(409, f"Service is {svc.state.value}, not running")
 
     # Lock check: if another operation is already in progress, reject immediately.
     if svc.lock.locked():
-        raise HTTPException(status_code=409, detail="Operation already in progress for this service")
+        raise HTTPError(409, "Operation already in progress for this service")
 
     # Create tracker before spawning the background task so we have the
     # operation_id to return in the 202 response.
@@ -410,31 +413,31 @@ async def restart_service(
 
     asyncio.create_task(_run_restart())
     return JSONResponse(
-        status_code=202,
-        content={"operation_id": op.operation_id, "service_key": key},
+        {"operation_id": op.operation_id, "service_key": key},
+        status=202,
     )
 
 
 @router.post("/api/services/{key:path}/retry-migrations")
-async def retry_migrations(
-    key: str,
-    services: ServiceManager = Depends(get_service_manager),
-    events: EventManager = Depends(get_event_manager),
-) -> object:
+async def retry_migrations(request: Request) -> object:
     """Re-run supabase migrations on a running service."""
     from codehome.serve import supabase as sb
 
+    key = request.path_params["key"]
+    services: ServiceManager = get_service_manager(request)
+    events: EventManager = get_event_manager(request)
+
     svc = services.get(key)
     if not svc:
-        raise HTTPException(status_code=404, detail=f"Service not found: {key}")
+        raise HTTPError(404, f"Service not found: {key}")
     if svc.service_type != "supabase":
-        raise HTTPException(status_code=409, detail="Only supabase services support migrations")
+        raise HTTPError(409, "Only supabase services support migrations")
 
     wt = Path(svc.metadata["worktree"])
     async with svc.lock:
         # State check inside the lock to prevent TOCTOU races.
         if svc.state != State.RUNNING:
-            raise HTTPException(status_code=409, detail="Service must be running to retry migrations")
+            raise HTTPError(409, "Service must be running to retry migrations")
         ok, msg = await asyncio.to_thread(sb.apply_migrations, wt)
 
         if ok:
@@ -449,11 +452,7 @@ async def retry_migrations(
 
 
 @router.get("/api/services/{key:path}/deps-status")
-async def deps_status(
-    key: str,
-    services: ServiceManager = Depends(get_service_manager),
-    events: EventManager = Depends(get_event_manager),
-) -> object:
+async def deps_status(request: Request) -> object:
     """Check whether a service's node_modules volume is stale.
 
     Compares the host lockfile hash against the fingerprint stored in the
@@ -462,19 +461,23 @@ async def deps_status(
     from codehome.serve.deps import check_deps_staleness, resolve_container_name, resolve_host_app_dir
     from codehome.serve.docker import compose_project_name
 
+    key = request.path_params["key"]
+    services: ServiceManager = get_service_manager(request)
+    events: EventManager = get_event_manager(request)
+
     svc = services.get(key)
     if not svc:
-        raise HTTPException(status_code=404, detail=f"Service not found: {key}")
+        raise HTTPError(404, f"Service not found: {key}")
 
     # Only compose services with an app_dir have node_modules to check.
     app_dir = svc.metadata.get("app_dir")
     worktree = svc.metadata.get("worktree")
     if not app_dir or not worktree:
-        raise HTTPException(status_code=409, detail="Service does not use a lockfile-managed volume")
+        raise HTTPError(409, "Service does not use a lockfile-managed volume")
 
     host_app = resolve_host_app_dir(worktree, app_dir)
     if not host_app:
-        raise HTTPException(status_code=409, detail="Could not resolve host app directory")
+        raise HTTPError(409, "Could not resolve host app directory")
 
     project = compose_project_name(svc.branch)
     compose_service = svc.metadata.get("compose_service", "vite")
@@ -489,50 +492,50 @@ async def deps_status(
 
 
 @router.post("/api/services/{key:path}/reinstall-deps")
-async def reinstall_deps(
-    key: str,
-    services: ServiceManager = Depends(get_service_manager),
-    events: EventManager = Depends(get_event_manager),
-    ports: PortAllocator = Depends(get_port_allocator),
-    error_log: ErrorLog = Depends(get_error_log),
-) -> object:
+async def reinstall_deps(request: Request) -> object:
     """Force-reinstall dependencies by removing the stale volume and recreating the container.
 
     Only works on compose services with an app_dir (vite services).
     The service must be running -- it will be stopped, volume removed,
     and container recreated with a fresh npm ci.
     """
+    key = request.path_params["key"]
+    services: ServiceManager = get_service_manager(request)
+    events: EventManager = get_event_manager(request)
+    ports: PortAllocator = get_port_allocator(request)
+    error_log: ErrorLog = get_error_log(request)
+
     svc = services.get(key)
     if not svc:
-        raise HTTPException(status_code=404, detail=f"Service not found: {key}")
+        raise HTTPError(404, f"Service not found: {key}")
     if svc.service_type != "compose":
-        raise HTTPException(status_code=409, detail="Only compose services support dependency reinstall")
+        raise HTTPError(409, "Only compose services support dependency reinstall")
 
     app_dir = svc.metadata.get("app_dir")
     worktree = svc.metadata.get("worktree")
     if not app_dir or not worktree:
-        raise HTTPException(status_code=409, detail="Service does not use a lockfile-managed volume")
+        raise HTTPError(409, "Service does not use a lockfile-managed volume")
 
     async with svc.lock:
         # State check inside the lock to prevent TOCTOU races.
         if svc.state != State.RUNNING:
-            raise HTTPException(status_code=409, detail=f"Service is {svc.state.value}, must be running")
+            raise HTTPError(409, f"Service is {svc.state.value}, must be running")
         return await lifecycle_reinstall_deps(svc, services, events, ports, error_log=error_log)
 
 
 @router.delete("/api/services/{key:path}")
-async def unregister_service(
-    key: str,
-    services: ServiceManager = Depends(get_service_manager),
-    events: EventManager = Depends(get_event_manager),
-    ports: PortAllocator = Depends(get_port_allocator),
-) -> object:
+async def unregister_service(request: Request) -> object:
     """Remove a service from the registry. Must be stopped first."""
+    key = request.path_params["key"]
+    services: ServiceManager = get_service_manager(request)
+    events: EventManager = get_event_manager(request)
+    ports: PortAllocator = get_port_allocator(request)
+
     svc = services.get(key)
     if not svc:
-        raise HTTPException(status_code=404, detail=f"Service not found: {key}")
+        raise HTTPError(404, f"Service not found: {key}")
     if svc.state == State.RUNNING:
-        raise HTTPException(status_code=409, detail="Stop the service before unregistering")
+        raise HTTPError(409, "Stop the service before unregistering")
     unregister_service_ports(svc, ports)
     services.unregister(key)
     await bus_fire(Event(name="service.state", payload={**svc.to_dict(), "state": "unregistered"}))
@@ -543,14 +546,14 @@ async def unregister_service(
 
 
 @router.get("/api/branches/{qualified}/services/available")
-async def get_available_services(
-    qualified: str,
-    services: ServiceManager = Depends(get_service_manager),
-) -> object:
+async def get_available_services(request: Request) -> object:
     """Return service definitions from .services.json, with registration status.
 
     Cross-references with already-registered services to show which are set up.
     """
+    qualified = request.path_params["qualified"]
+    services: ServiceManager = get_service_manager(request)
+
     repo, branch = qualified.split(":", 1)
     svc_defs = await asyncio.to_thread(load_services_config, repo, branch)
     if svc_defs is None:
@@ -566,12 +569,12 @@ async def get_available_services(
 
 
 @router.post("/api/branches/{qualified}/services/setup")
-async def setup_branch_services(
-    qualified: str,
-    services: ServiceManager = Depends(get_service_manager),
-    events: EventManager = Depends(get_event_manager),
-) -> object:
+async def setup_branch_services(request: Request) -> object:
     """Register all services from .services.json for a branch."""
+    qualified = request.path_params["qualified"]
+    services: ServiceManager = get_service_manager(request)
+    events: EventManager = get_event_manager(request)
+
     registered = await lifecycle_setup(qualified, services, events)
     if not registered and registered is not None:
         # lifecycle_setup returns [] when no config found; distinguish from empty list.
@@ -579,9 +582,9 @@ async def setup_branch_services(
         repo, branch = qualified.split(":", 1)
         svc_defs = await asyncio.to_thread(load_services_config, repo, branch)
         if svc_defs is None:
-            raise HTTPException(
-                status_code=404,
-                detail="No service configuration found. Create .services.template.json in the repo root.",
+            raise HTTPError(
+                404,
+                "No service configuration found. Create .services.template.json in the repo root.",
             )
     return {"ok": True, "services": registered}
 
@@ -592,13 +595,13 @@ class CleanupRequest(BaseModel):
 
 
 @router.post("/api/services/cleanup")
-async def cleanup_services(
-    req: CleanupRequest,
-    services: ServiceManager = Depends(get_service_manager),
-    events: EventManager = Depends(get_event_manager),
-    ports: PortAllocator = Depends(get_port_allocator),
-) -> object:
+async def cleanup_services(request: Request) -> object:
     """Stop all services for a branch and release resources."""
+    req = request.json_as(CleanupRequest)
+    services: ServiceManager = get_service_manager(request)
+    events: EventManager = get_event_manager(request)
+    ports: PortAllocator = get_port_allocator(request)
+
     cleaned = await cleanup_branch_services(
         req.branch,
         services,
@@ -610,13 +613,13 @@ async def cleanup_services(
 
 
 @router.post("/api/branches/{qualified}/cleanup")
-async def api_branch_cleanup(
-    qualified: str,
-    services: ServiceManager = Depends(get_service_manager),
-    events: EventManager = Depends(get_event_manager),
-    ports: PortAllocator = Depends(get_port_allocator),
-) -> object:
+async def api_branch_cleanup(request: Request) -> object:
     """Stop all services and remove Docker volumes for a branch."""
+    qualified = request.path_params["qualified"]
+    services: ServiceManager = get_service_manager(request)
+    events: EventManager = get_event_manager(request)
+    ports: PortAllocator = get_port_allocator(request)
+
     stopped_names = [svc.key for svc in services.list_for_branch(qualified)]
 
     await cleanup_branch_services(qualified, services, events, ports, remove_volumes=True)
@@ -629,21 +632,21 @@ async def api_branch_cleanup(
 
 
 @router.get("/api/port-allocations")
-async def get_port_allocations(ports: PortAllocator = Depends(get_port_allocator)) -> object:
+async def get_port_allocations(request: Request) -> object:
     """Raw port-allocation map used by the authenticated dashboard UI.
 
     Previously exposed at ``/api/ports``; renamed when that path was
     reclaimed for the narrow unauthenticated ``list_vite_ports`` endpoint
     (see ``public_router`` above).
     """
+    ports: PortAllocator = get_port_allocator(request)
     return ports.all_allocations()
 
 
 @router.get("/api/metrics/history")
-async def metrics_history(
-    minutes: int = 5,
-    metrics_collector: MetricsCollector = Depends(get_metrics_collector),
-) -> object:
+async def metrics_history(request: Request) -> object:
+    minutes = request.query("minutes", default=5, type_=int)
+    metrics_collector: MetricsCollector = get_metrics_collector(request)
     return metrics_collector.get_history(minutes)
 
 
@@ -651,7 +654,8 @@ async def metrics_history(
 
 
 @router.get("/api/tests")
-async def list_tests(repo: str = "bag") -> object:
+async def list_tests(request: Request) -> object:
+    repo = request.query("repo", default="bag")
     return discover_suites(repo)
 
 
@@ -663,12 +667,13 @@ class TestRunRequest(BaseModel):
 
 
 @router.post("/api/tests/run")
-async def run_test_suite(req: TestRunRequest) -> object:
+async def run_test_suite(request: Request) -> object:
     from codehome.serve.test_ops import resolve_test_env, resolve_test_file, tests_dir
 
+    req = request.json_as(TestRunRequest)
     test_file = resolve_test_file(req.suite)
     if not test_file:
-        raise HTTPException(status_code=404, detail=f"Test suite not found: {req.suite}")
+        raise HTTPError(404, f"Test suite not found: {req.suite}")
 
     env_overrides = resolve_test_env(req.branch)
 
@@ -685,11 +690,12 @@ async def run_test_suite(req: TestRunRequest) -> object:
 
 
 @router.post("/api/tests/stop/{run_id}")
-async def stop_tests(run_id: str) -> object:
+async def stop_tests(request: Request) -> object:
     """Stop an active test run by run_id."""
+    run_id = request.path_params["run_id"]
     stopped = stop_test_run(run_id)
     if not stopped:
-        raise HTTPException(status_code=404, detail=f"No active run: {run_id}")
+        raise HTTPError(404, f"No active run: {run_id}")
     return {"ok": True}
 
 
@@ -697,7 +703,7 @@ async def stop_tests(run_id: str) -> object:
 
 
 @router.get("/api/operations")
-async def list_operations() -> object:
+async def list_operations(request: Request) -> object:
     """List all active and recently-completed operations.
 
     Returns operation metadata (no event payloads). Use the per-operation
@@ -710,7 +716,7 @@ async def list_operations() -> object:
 
 
 @router.get("/api/operations/{operation_id:path}/detail")
-async def get_operation_detail(operation_id: str) -> dict[str, Any]:
+async def get_operation_detail(request: Request) -> dict[str, Any]:
     """Return operation metadata + buffered events as JSON.
 
     Used by the ProgressDrawer to catch up on events emitted before the
@@ -718,20 +724,17 @@ async def get_operation_detail(operation_id: str) -> dict[str, Any]:
     """
     from codehome.serve.operations import operation_registry
 
+    operation_id = request.path_params["operation_id"]
     op = await operation_registry.get(operation_id)
     if not op:
-        raise HTTPException(status_code=404, detail="Operation not found")
+        raise HTTPError(404, "Operation not found")
     result = op.to_dict()
     result["events"] = await operation_registry.get_events(operation_id)
     return result
 
 
 @router.get("/api/operations/{operation_id:path}/events")
-async def operation_events_stream(
-    operation_id: str,
-    since: int = 0,
-    events: EventManager = Depends(get_event_manager),
-) -> StreamingResponse:
+async def operation_events_stream(request: Request) -> StreamResponse:
     """SSE stream of events for a specific operation.
 
     Query params:
@@ -749,9 +752,13 @@ async def operation_events_stream(
     """
     from codehome.serve.operations import operation_registry
 
+    operation_id = request.path_params["operation_id"]
+    since = request.query("since", default=0, type_=int)
+    events: EventManager = get_event_manager(request)
+
     op = await operation_registry.get(operation_id)
     if not op:
-        raise HTTPException(status_code=404, detail=f"Operation not found: {operation_id}")
+        raise HTTPError(404, f"Operation not found: {operation_id}")
 
     async def generate() -> AsyncGenerator[str, None]:
         import json
@@ -800,9 +807,9 @@ async def operation_events_stream(
                         yield f"event: operation:done\ndata: {json.dumps(rec.to_dict())}\n\n"
                         return
 
-    return StreamingResponse(
+    return StreamResponse(
         generate(),
-        media_type="text/event-stream",
+        content_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "Connection": "keep-alive",
