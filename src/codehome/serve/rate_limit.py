@@ -1,10 +1,17 @@
-"""Rate limiting configuration using slowapi.
+"""Rate limiting compatibility layer.
 
-Uses in-memory storage (no Redis needed) since the dashboard serves
-a small number of users behind Twingate.
+During the migration transition, existing FastAPI routers use the slowapi
+``limiter`` object (if available) or a no-op stub.  New wesktop-based
+routers should use ``wesktop.auth.rate_limit`` directly.
+
+Once all routers are migrated to wesktop (Phase 9.4), this module can be
+deleted entirely.
 """
 
 from typing import Any
+
+# Re-export wesktop's rate_limit for new code.
+from wesktop.auth import rate_limit  # noqa: F401
 
 try:
     from slowapi import Limiter

@@ -1,4 +1,9 @@
-"""FastAPI server for the local dev orchestration server."""
+"""ASGI server for the local dev orchestration server.
+
+Uses wesktop for middleware (request ID, timing, CORS, CSRF) and keeps
+FastAPI for routing during the migration transition (Phase 9.1-9.3).
+Routers migrate to wesktop Router in Phase 9.4.
+"""
 
 import asyncio
 import os
@@ -8,6 +13,10 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import Depends, FastAPI
+
+from wesktop.middleware import RequestIDMiddleware, RequestTimingMiddleware
+
+from codehome.serve.csrf import CodehomeCSRFMiddleware
 
 from codehome.config import load_server_config
 from codehome.paths import codehome_home
@@ -31,6 +40,13 @@ _DEV_MODE = os.environ.get("V_SERVER_DEV") == "1"
 
 # Set in lifespan, not at import time, so uptime reflects actual server start.
 _server_start_time: float = 0
+
+# CSRF exempt paths -- unauthenticated POSTs that carry no Bearer token.
+_CSRF_EXEMPT_PATHS = [
+    "/api/auth/login",
+    "/api/diagnostics/errors",
+    "/api/services/discover",
+]
 
 
 # ---------------------------------------------------------------------------
@@ -220,38 +236,28 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 # App creation and router registration
 # ---------------------------------------------------------------------------
 
-app = FastAPI(title="Veliu Dev Dashboard", lifespan=lifespan)
+# FastAPI app handles routing only -- middleware is applied by wesktop below.
+_fastapi_app = FastAPI(title="Veliu Dev Dashboard", lifespan=lifespan)
 
-# -- Rate limiting middleware -----------------------------------------------
-from codehome.serve.rate_limit import SLOWAPI_AVAILABLE, limiter  # noqa: E402
 
-if SLOWAPI_AVAILABLE:
-    from slowapi import _rate_limit_exceeded_handler
-    from slowapi.errors import RateLimitExceeded
+# -- Bridge wesktop HTTPError into FastAPI's exception handling --------
+# Dependencies and auth modules now raise wesktop.HTTPError instead of
+# FastAPI's HTTPException.  Register a handler so FastAPI catches these
+# and returns the correct JSON error response.
+from wesktop.asgi import HTTPError as _WesktopHTTPError  # noqa: E402
+from fastapi.responses import JSONResponse as _FastAPIJSONResponse  # noqa: E402
 
-    app.state.limiter = limiter
-    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)  # type: ignore[arg-type]
-    # SlowAPIMiddleware intentionally NOT added: it extends BaseHTTPMiddleware
-    # which wraps streaming responses in anyio memory streams, silently killing
-    # long-lived SSE connections via CancelledError. Rate limiting on a localhost
-    # dev server is not worth breaking SSE.
 
-# -- CSRF protection middleware --------------------------------------------
-from codehome.serve.csrf import CSRFMiddleware  # noqa: E402
-
-app.add_middleware(CSRFMiddleware)
-
-# -- Request tracing middleware --------------------------------------------
-from codehome.serve.middleware import RequestIDMiddleware, RequestTimingMiddleware  # noqa: E402
-
-# Order matters: Starlette wraps outermost-last, so add timing first (inner)
-# then ID (outer).  This ensures the request ID is available when timing logs.
-app.add_middleware(RequestTimingMiddleware)
-app.add_middleware(RequestIDMiddleware)
+@_fastapi_app.exception_handler(_WesktopHTTPError)
+async def _wesktop_http_error_handler(_request, exc: _WesktopHTTPError):
+    return _FastAPIJSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+    )
 
 
 # Public ping endpoint (no auth, no router file needed).
-@app.get("/api/ping")
+@_fastapi_app.get("/api/ping")
 async def ping() -> dict[str, bool]:
     return {"ok": True}
 
@@ -277,14 +283,14 @@ from codehome.serve.routers import plugins as plugins_router  # noqa: E402
 from codehome.serve.routers import services as services_router  # noqa: E402
 
 # Public routers (no auth dependency).
-app.include_router(auth.public_router)
-app.include_router(system.public_router)
-app.include_router(services_router.public_router)
-app.include_router(features_router.router)
+_fastapi_app.include_router(auth.public_router)
+_fastapi_app.include_router(system.public_router)
+_fastapi_app.include_router(services_router.public_router)
+_fastapi_app.include_router(features_router.router)
 
 # Feature-gated public routers: disable via features.json
 if features.enabled("conductor"):
-    app.include_router(agents.public_router)
+    _fastapi_app.include_router(agents.public_router)
 
 # Push public endpoint (VAPID key retrieval, no auth required).
 if features.enabled("push"):
@@ -297,7 +303,7 @@ if features.enabled("push"):
         """Return the public VAPID key for push subscription registration."""
         return {"public_key": push_manager.public_key}
 
-    app.include_router(_push_public)
+    _fastapi_app.include_router(_push_public)
 
 # Authenticated routers (all endpoints require valid JWT).
 # NOTE: branches, git, system (authed), and matrix routers moved to core plugin.
@@ -314,7 +320,7 @@ if features.enabled("conductor"):
     _authed_routers.append(conductor.router)
     _authed_routers.append(agents.router)
 for _r in _authed_routers:
-    app.include_router(_r, dependencies=[Depends(get_current_user)])
+    _fastapi_app.include_router(_r, dependencies=[Depends(get_current_user)])
 
 # -- Plugin-contributed routers (authenticated, gated on "plugins" flag) ----
 from codehome.plugins import registry as _plugin_registry  # noqa: E402
@@ -324,12 +330,12 @@ if features.enabled("plugins"):
         if _plugin.router is not None:
             if _plugin.manifest.root_routes:
                 # Mount at API root (endpoints define their own /api/ paths).
-                app.include_router(
+                _fastapi_app.include_router(
                     _plugin.router,
                     dependencies=[Depends(get_current_user)],
                 )
             else:
-                app.include_router(
+                _fastapi_app.include_router(
                     _plugin.router,
                     prefix=f"/api/p/{_plugin.name}",
                     dependencies=[Depends(get_current_user)],
@@ -338,9 +344,9 @@ if features.enabled("plugins"):
         # are mounted without the auth dependency.
         if _plugin.public_router is not None:
             if _plugin.manifest.root_routes:
-                app.include_router(_plugin.public_router)
+                _fastapi_app.include_router(_plugin.public_router)
             else:
-                app.include_router(
+                _fastapi_app.include_router(
                     _plugin.public_router,
                     prefix=f"/api/p/{_plugin.name}",
                 )
@@ -351,8 +357,47 @@ if features.enabled("plugins"):
 if not _DEV_MODE:
     from codehome.serve.static_files import router as _static_router
 
-    app.include_router(_static_router)
+    _fastapi_app.include_router(_static_router)
 
+
+# ---------------------------------------------------------------------------
+# Wesktop middleware stack wrapping the FastAPI app
+# ---------------------------------------------------------------------------
+# The FastAPI app handles routing and lifespan.  Wesktop middleware wraps it
+# for request ID, timing, CSRF, and (in dev mode) CORS.
+#
+# Middleware order (innermost first):
+#   RequestTimingMiddleware -> CSRF -> RequestIDMiddleware -> [CORS] -> [ViteProxy]
+
+# CSRF middleware with codehome-specific exempt paths and token-file bypass.
+# The token-file check is kept in codehome's CSRF wrapper (not in wesktop's
+# generic CSRF) since it's codehome-specific behavior.
+_csrf_mw = CodehomeCSRFMiddleware(
+    _fastapi_app,
+    exempt_paths=_CSRF_EXEMPT_PATHS,
+)
+
+# Request timing (innermost -- needs request ID in scope for log correlation).
+# The timing middleware instance is stored so system.py can access its counters.
+_timing_mw = RequestTimingMiddleware(
+    _csrf_mw,
+    exclude_paths=["/events", "/api/terminal"],
+)
+
+# Request ID (outer -- sets ID before timing runs).
+_request_id_mw = RequestIDMiddleware(_timing_mw)
+
+# Build the final ASGI app with optional dev-mode middleware.
+_outer_app: Any = _request_id_mw
+
+# Dev mode: add CORS (Vite dev server runs on a different origin).
+if _DEV_MODE:
+    from wesktop.middleware import CORSMiddleware
+
+    _outer_app = CORSMiddleware(
+        _outer_app,
+        allow_origins=["https://localhost:5173", "http://localhost:5173"],
+    )
 
 # -- Vite dev proxy (dev mode only) ----------------------------------------
 # Added AFTER app construction so it wraps the entire ASGI app.  The
@@ -362,5 +407,36 @@ _vite_proxy = None
 if _DEV_MODE:
     from codehome.serve.vite_dev import ViteProxyMiddleware
 
-    _vite_proxy = ViteProxyMiddleware(app)
-    app = _vite_proxy  # type: ignore[assignment]
+    _vite_proxy = ViteProxyMiddleware(_outer_app)
+    _outer_app = _vite_proxy
+
+
+class _ASGIAppProxy:
+    """Proxy that wraps the ASGI middleware stack while exposing FastAPI's state.
+
+    During the hybrid migration phase (FastAPI routing + wesktop middleware),
+    existing code (plugins, tests) accesses ``app.state`` and
+    ``app.dependency_overrides``.  This proxy delegates ASGI calls to the
+    middleware stack and attribute access to the underlying FastAPI app.
+    """
+
+    def __init__(self, asgi_app: Any, fastapi_app: FastAPI) -> None:
+        object.__setattr__(self, "_asgi_app", asgi_app)
+        object.__setattr__(self, "_fastapi_app", fastapi_app)
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        asgi_app = object.__getattribute__(self, "_asgi_app")
+        await asgi_app(scope, receive, send)
+
+    def __getattr__(self, name: str) -> Any:
+        fastapi_app = object.__getattribute__(self, "_fastapi_app")
+        return getattr(fastapi_app, name)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        fastapi_app = object.__getattribute__(self, "_fastapi_app")
+        setattr(fastapi_app, name, value)
+
+
+# The module-level ``app`` is ASGI-callable (for Granian) and also exposes
+# ``.state`` and ``.dependency_overrides`` (for plugins and tests).
+app: Any = _ASGIAppProxy(_outer_app, _fastapi_app)

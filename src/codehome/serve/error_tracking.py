@@ -1,8 +1,11 @@
-"""Sentry error tracking integration for the FastAPI backend.
+"""Sentry error tracking integration.
 
 Initializes Sentry if a DSN is configured in the server config
 (~/.codehome/config.json, key: "sentry_dsn"). If no DSN is present,
 initialization is silently skipped.
+
+Uses the generic ASGI integration (no FastAPI-specific extras needed)
+since the middleware stack is now wesktop-based.
 """
 
 import logging
@@ -11,8 +14,6 @@ logger = logging.getLogger(__name__)
 
 try:
     import sentry_sdk
-    from sentry_sdk.integrations.fastapi import FastApiIntegration
-    from sentry_sdk.integrations.starlette import StarletteIntegration
 
     _HAS_SENTRY = True
 except ModuleNotFoundError:
@@ -29,11 +30,21 @@ def _before_send(event: dict[str, object], hint: dict[str, object]) -> dict[str,
         exc_info = hint["exc_info"]
         assert isinstance(exc_info, tuple)
         _exc_type, exc_value, _tb = exc_info
-        # FastAPI/Starlette HTTP exceptions with 4xx status codes are expected.
-        from starlette.exceptions import HTTPException
 
-        if isinstance(exc_value, HTTPException) and 400 <= exc_value.status_code < 500:
+        # wesktop HTTPError with 4xx status codes are expected.
+        from wesktop.asgi import HTTPError
+
+        if isinstance(exc_value, HTTPError) and 400 <= exc_value.status_code < 500:
             return None
+
+        # FastAPI/Starlette HTTP exceptions with 4xx status codes (hybrid phase).
+        try:
+            from starlette.exceptions import HTTPException
+
+            if isinstance(exc_value, HTTPException) and 400 <= exc_value.status_code < 500:
+                return None
+        except ImportError:
+            pass
 
     return event
 
@@ -57,12 +68,26 @@ def init_sentry(config: object) -> bool:
         logger.warning("sentry_sdk not installed; Sentry error tracking disabled")
         return False
 
+    # Use available integrations -- the FastAPI/Starlette integrations are
+    # optional (they come with sentry-sdk[fastapi] extra). During the
+    # migration, they may or may not be installed.
+    integrations = []
+    try:
+        from sentry_sdk.integrations.starlette import StarletteIntegration
+
+        integrations.append(StarletteIntegration())
+    except ImportError:
+        pass
+    try:
+        from sentry_sdk.integrations.fastapi import FastApiIntegration
+
+        integrations.append(FastApiIntegration())
+    except ImportError:
+        pass
+
     sentry_sdk.init(
         dsn=dsn,
-        integrations=[
-            StarletteIntegration(),
-            FastApiIntegration(),
-        ],
+        integrations=integrations,
         before_send=_before_send,  # type: ignore[arg-type]
         # Capture 100% of errors; adjust if volume becomes a concern.
         sample_rate=1.0,

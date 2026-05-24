@@ -15,13 +15,13 @@ dependencies = [
     "mcp>=1.0.0",
     "pyjwt[crypto]>=2.8.0",
     "pywebpush>=2.3.0",
-    "sentry-sdk[fastapi]>=2.57.0",
-    "slowapi>=0.1.9",
+    "sentry-sdk>=2.57.0",
     "structlog>=25.5.0",
     "httpx>=0.28.1",
     "tomli-w>=1.0.0",
     "pyyaml>=6.0",
     "websockets>=13.0",
+    "wesktop",
 ]
 
 [project.scripts]

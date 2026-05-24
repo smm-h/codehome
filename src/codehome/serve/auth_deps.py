@@ -1,54 +1,70 @@
-"""FastAPI authentication dependencies used by router modules.
+"""Authentication dependencies for route handlers.
 
-Extracted from server.py to break circular import chains -- routers
-import these functions without pulling in the full app module.
+Wraps wesktop's auth module to add codehome-specific behavior:
+- 4th token source: CLI token file (~/.codehome/token)
+- Sentry user context integration
+- request.state._user assignment for timing middleware
+
+During the hybrid migration phase, these functions are used both as
+FastAPI Depends() targets and as wesktop DI factories (both receive
+a request object as the first argument).
 """
 
 import logging
+from typing import Any
 
-from fastapi import Cookie, Depends, HTTPException
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from starlette.requests import Request
+from wesktop.asgi import HTTPError
+from wesktop.auth import verify_token
 
 from codehome.http_client import _resolve_token_file
-from codehome.serve.auth import verify_token
 from codehome.serve.error_tracking import set_user_context
 
 log = logging.getLogger(__name__)
 
-# Optional bearer scheme -- does not auto-reject missing tokens (we handle that).
-_bearer_scheme = HTTPBearer(auto_error=False)
 
-
-async def get_current_user(
-    request: Request,
-    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
-    session: str | None = Cookie(default=None),
-) -> dict[str, str]:
+async def get_current_user(request: Request) -> dict[str, str]:  # type: ignore[override]
     """Extract and validate JWT from Authorization header, session cookie, query param, or CLI token file.
 
-    The ``?token=`` query-param fallback exists because browser APIs like
-    ``EventSource`` (SSE) cannot set custom headers -- same pattern used by
-    the WebSocket terminal endpoint.
-
-    The ``~/.codehome/token`` file fallback enables bidirectional auth sync:
-    logging in via the CLI (which writes this file) automatically authenticates
-    the dashboard browser session.
+    Token resolution order:
+    1. Authorization: Bearer <token> header
+    2. session cookie
+    3. ?token= query parameter
+    4. CLI token file (~/.codehome/token)
 
     Returns the decoded claims dict (with 'sub' and 'role' keys).
-    Raises 401 if no valid token is found.
+    Raises HTTPError(401) if no valid token is found.
     """
     token: str | None = None
-    if credentials:
-        token = credentials.credentials
-    elif session:
-        token = session
-    elif request.query_params.get("token"):
-        token = request.query_params["token"]
 
-    # Fallback: read CLI token file (~/.codehome/token)
-    # so that CLI login automatically works in the browser without a separate
-    # dashboard login.
+    # 1. Bearer header
+    # Works with both Starlette Request (.headers is a Headers mapping) and
+    # wesktop Request (.header() method).
+    if hasattr(request, "headers") and hasattr(request.headers, "get"):
+        auth_header = request.headers.get("authorization", "")
+    elif hasattr(request, "header"):
+        auth_header = request.header("authorization", "") or ""
+    else:
+        auth_header = ""
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:]
+
+    # 2. Session cookie
+    # Starlette: request.cookies dict; wesktop: request.cookie() method.
+    if not token:
+        if hasattr(request, "cookies") and isinstance(request.cookies, dict):
+            token = request.cookies.get("session") or None
+        elif hasattr(request, "cookie"):
+            token = request.cookie("session") or None
+
+    # 3. Query parameter
+    # Both Starlette and wesktop support request.query_params with .get().
+    if not token:
+        qp = getattr(request, "query_params", None)
+        if qp is not None and hasattr(qp, "get"):
+            token = qp.get("token") or None
+
+    # 4. CLI token file (~/.codehome/token) fallback
     from_token_file = False
     if not token:
         try:
@@ -61,12 +77,14 @@ async def get_current_user(
             log.debug("Could not read CLI token file")
 
     if not token:
-        raise HTTPException(status_code=401, detail="Not authenticated")
+        raise HTTPError(401, "Not authenticated")
 
-    config = request.app.state.config
-    claims = verify_token(token, config.jwt_secret)
+    # Resolve JWT secret from request state (works with both FastAPI and wesktop).
+    config = _get_config(request)
+    jwt_secret = config.jwt_secret if hasattr(config, "jwt_secret") else config["jwt_secret"]
+    claims = verify_token(token, jwt_secret)
     if not claims:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
+        raise HTTPError(401, "Invalid or expired token")
 
     # Store on request.state so the timing middleware can log the user and
     # Sentry can attach user context to error reports.
@@ -79,8 +97,35 @@ async def get_current_user(
     return claims
 
 
-async def require_admin(user: dict[str, str] = Depends(get_current_user)) -> dict[str, str]:
-    """Dependency that ensures the current user has the admin role."""
+async def require_admin(request: Request) -> dict[str, str]:  # type: ignore[override]
+    """Dependency that ensures the current user has the admin role.
+
+    Works as both a FastAPI Depends() target and a wesktop DI factory.
+    """
+    user = await get_current_user(request)
     if user.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Admin access required")
+        raise HTTPError(403, "Admin access required")
     return user
+
+
+def _get_config(request: Any) -> Any:
+    """Extract server config from request state, handling both FastAPI and wesktop patterns."""
+    # FastAPI pattern: request.app.state.config
+    app = getattr(request, "app", None)
+    if app is not None:
+        config = getattr(getattr(app, "state", None), "config", None)
+        if config is not None:
+            return config
+
+    # wesktop pattern: request.state.config or request.state["config"]
+    state = getattr(request, "state", None)
+    if state is not None:
+        config = getattr(state, "config", None)
+        if config is not None:
+            return config
+        if hasattr(state, "get"):
+            config = state.get("config")
+            if config is not None:
+                return config
+
+    raise HTTPError(401, "Server config unavailable")
