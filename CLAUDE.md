@@ -25,6 +25,10 @@ Global config lives at `~/.codehome/config.toml`. See `config.toml.example` for 
 Key settings:
 - `[plugins] paths` -- list of directories to scan for plugins. If unset (or no config.toml exists), falls back to `ROOT/plugins/`. `~/.codehome/plugins/` is always scanned as a second tier; configured paths take priority on name collision.
 
+## Desktop mode (pywebview)
+
+`v open` opens the dashboard in a native desktop window via [pywebview](https://pywebview.flowrl.com/). This is an optional dependency -- install with `pip install pywebview`. If pywebview is not installed, `v open` exits with an error; use `v open --browser` to open in the default browser instead.
+
 ## Conventions
 
 - No tokens or secrets in command-line arguments (use env vars or config files)
