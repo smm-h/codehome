@@ -1,6 +1,10 @@
+---
+description: codehome is a plugin runtime for developer tools, providing a CLI, server, event bus, state stores, check framework, and SDK for building extensible dev tool plugins.
+---
+
 # codehome
 
-Plugin runtime for dev tools: server, auth, event bus, check framework, and SDK
+Plugin runtime for dev tools: server, auth, event bus, check framework, and SDK. Provides commands, API routes, checks, event handlers, and UI panels through a manifest-driven plugin system.
 
 ## API Reference
 
