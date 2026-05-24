@@ -2,6 +2,14 @@
 
 # Changelog
 
+## 0.3.2
+
+### Fixes
+
+- **Fix.** Use wesktop AppConfig for centralized app configuration.
+- **Fix.** Import MCP roles and tools from wesktop instead of maintaining local copies.
+- **Fix.** Document pywebview as optional dependency for the 'v open' command.
+
 ## 0.3.1
 
 ### Fixes
