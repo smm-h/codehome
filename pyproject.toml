@@ -1,6 +1,6 @@
 [project]
 name = "codehome"
-version = "0.3.2"
+version = "0.3.3"
 keywords = ["rlsbl"]
 description = "Plugin runtime for dev tools: server, auth, event bus, check framework, and SDK"
 requires-python = ">=3.11"

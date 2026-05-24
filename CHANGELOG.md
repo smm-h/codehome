@@ -2,6 +2,14 @@
 
 # Changelog
 
+## 0.3.3
+
+### Fixes
+
+- **Fix.** Remove dead rate_limit.py module.
+- **Fix.** Remove unused CSRFMiddleware re-export.
+- **Fix.** Simplify middleware proxy: replace classes with accessor functions.
+
 ## 0.3.2
 
 ### Fixes
