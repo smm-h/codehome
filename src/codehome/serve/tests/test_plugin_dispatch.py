@@ -12,7 +12,7 @@ from pathlib import Path
 import httpx
 import pytest
 import pytest_asyncio
-from fastapi import APIRouter
+from wesktop import Router
 
 from codehome.plugins import registry
 from codehome.plugins.manifest import DashboardDecl, PluginManifest
@@ -43,15 +43,15 @@ def _make_plugin(name: str, *, with_router: bool = True) -> LoadedPlugin:
     )
     plugin_router = None
     if with_router:
-        plugin_router = APIRouter()
+        plugin_router = Router()
 
         @plugin_router.post("/ping")
-        async def ping():
+        async def ping(request):
             return {"pong": True}
 
         @plugin_router.post("/echo")
-        async def echo(message: str = ""):
-            return {"echoed": message}
+        async def echo(request):
+            return {"echoed": ""}
 
     return LoadedPlugin(
         name=name,

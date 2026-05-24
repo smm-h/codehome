@@ -265,7 +265,7 @@ def load_all_plugins(root: Path | None = None) -> tuple[int, list[str]]:
             else:
                 errors.append(f"plugin '{name}': declares commands but handlers.py not found")
 
-        # routes.py -- FastAPI APIRouter for dashboard integration.
+        # routes.py -- wesktop Router for dashboard integration.
         public_router = None
         if manifest.dashboard is not None:
             routes_path = plugin_dir / "routes.py"

@@ -95,8 +95,8 @@ async def dispatch_command(request: Request) -> dict[str, Any]:
 
     The command name maps 1:1 to a POST endpoint on the plugin's router.
     Instead of making an HTTP round-trip to ourselves, we look up the
-    matching route on the plugin's ``APIRouter`` and call the endpoint
-    function directly, resolving FastAPI dependencies manually.
+    matching route on the plugin's wesktop Router and call the endpoint
+    function directly, resolving dependencies manually.
     """
     name = request.path_params["name"]
     payload: dict[str, Any] = request.json or {}
@@ -114,18 +114,20 @@ async def dispatch_command(request: Request) -> dict[str, Any]:
     if not re.fullmatch(r"[a-zA-Z0-9_-]+", command):
         raise HTTPError(400, "Invalid command name")
 
-    # Find the matching POST route on the plugin's router.
-    # Plugin routers are still FastAPI APIRouters during the migration.
-    target_path = f"/{command}"
+    # Find the matching POST route on the plugin's wesktop Router.
+    # Routes are stored as (method, parsed_segments, handler, deps, model)
+    # tuples. A single-segment literal path like "/ping" has parsed_segments
+    # = [("ping", None, None)].
     endpoint_fn = None
-    for route in plugin.router.routes:
-        if (
-            hasattr(route, "path")
-            and route.path == target_path
-            and "POST" in (getattr(route, "methods", None) or set())
-        ):
-            endpoint_fn = route.endpoint
-            break
+    for method, segments, handler, _deps, _model in plugin.router._routes:
+        if method != "POST":
+            continue
+        # Match single-segment literal paths (e.g. "/ping" -> [("ping", None, None)]).
+        if len(segments) == 1:
+            lit, _name, _conv = segments[0]
+            if lit == command:
+                endpoint_fn = handler
+                break
 
     if endpoint_fn is None:
         raise HTTPError(404, f"Command '{command}' not found on plugin '{name}'")

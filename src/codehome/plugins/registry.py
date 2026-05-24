@@ -33,7 +33,7 @@ class LoadedPlugin:
         description: Human-readable summary of what the plugin does.
         plugin_dir: Absolute path to the plugin's directory on disk.
         manifest: The parsed PluginManifest instance.
-        router: A FastAPI ``APIRouter`` from the plugin's ``routes.py``,
+        router: A wesktop ``Router`` from the plugin's ``routes.py``,
             or ``None`` if the plugin exposes no HTTP endpoints.
 
     """
