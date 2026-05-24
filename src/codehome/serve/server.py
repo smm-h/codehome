@@ -20,7 +20,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI
+from fastapi import FastAPI
 from wesktop import Router, create_app as wesktop_create_app
 
 from wesktop.middleware import RequestIDMiddleware, RequestTimingMiddleware
@@ -326,47 +326,36 @@ if features.enabled("conductor"):
 
 
 # ---------------------------------------------------------------------------
-# FastAPI sub-app for plugin routes (Phase 10 migrates these to wesktop)
+# Plugin routes (now wesktop Router, mounted on _wesktop_router)
 # ---------------------------------------------------------------------------
 
+# FastAPI sub-app retained only for backward compatibility with tests that
+# set app.dependency_overrides. Plugin routes now live on _wesktop_router.
 _fastapi_app = FastAPI(title="Veliu Dev Dashboard")
 
-# Bridge wesktop HTTPError into FastAPI's exception handling.
-from wesktop.asgi import HTTPError as _WesktopHTTPError  # noqa: E402
-from fastapi.responses import JSONResponse as _FastAPIJSONResponse  # noqa: E402
-
-
-@_fastapi_app.exception_handler(_WesktopHTTPError)
-async def _wesktop_http_error_handler(_request: Any, exc: _WesktopHTTPError) -> Any:
-    return _FastAPIJSONResponse(
-        status_code=exc.status_code,
-        content={"detail": exc.detail},
-    )
-
-
-# Plugin-contributed routers (authenticated, gated on "plugins" flag).
+# Plugin-contributed routers (wesktop Router, gated on "plugins" flag).
 from codehome.plugins import registry as _plugin_registry  # noqa: E402
 
 if features.enabled("plugins"):
     for _plugin in _plugin_registry.list_plugins():
         if _plugin.router is not None:
             if _plugin.manifest.root_routes:
-                _fastapi_app.include_router(
+                _wesktop_router.include_router(
                     _plugin.router,
-                    dependencies=[Depends(get_current_user)],
+                    deps=_auth_deps,
                 )
             else:
-                _fastapi_app.include_router(
+                _wesktop_router.include_router(
                     _plugin.router,
                     prefix=f"/api/p/{_plugin.name}",
-                    dependencies=[Depends(get_current_user)],
+                    deps=_auth_deps,
                 )
         # Public routers (e.g. WebSocket endpoints with query-param auth)
         if _plugin.public_router is not None:
             if _plugin.manifest.root_routes:
-                _fastapi_app.include_router(_plugin.public_router)
+                _wesktop_router.include_router(_plugin.public_router)
             else:
-                _fastapi_app.include_router(
+                _wesktop_router.include_router(
                     _plugin.public_router,
                     prefix=f"/api/p/{_plugin.name}",
                 )
