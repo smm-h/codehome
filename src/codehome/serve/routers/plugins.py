@@ -142,8 +142,11 @@ async def dispatch_command(request: Request) -> dict[str, Any]:
     params = payload.get("params", {})
 
     for param_name, param in sig.parameters.items():
+        # Wesktop handlers take 'request' as the first positional argument.
+        if param_name == "request":
+            kwargs[param_name] = request
         # Dependency-injected EventManager: resolve from app.state.
-        if param.annotation is not inspect.Parameter.empty and _is_event_manager(param.annotation):
+        elif param.annotation is not inspect.Parameter.empty and _is_event_manager(param.annotation):
             from codehome.serve.dependencies import get_event_manager
 
             kwargs[param_name] = get_event_manager(request)
