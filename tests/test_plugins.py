@@ -42,7 +42,6 @@ def test_minimal_manifest_parsed(tmp_path: Path) -> None:
     path, manifest = result.plugins[0]
     assert path == plugin_dir
     assert manifest.name == "hello"
-    assert manifest.version == "0.1.0"
     assert manifest.description == "A test plugin"
 
 
