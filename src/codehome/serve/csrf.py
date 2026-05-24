@@ -19,9 +19,6 @@ from wesktop.auth import CSRFMiddleware as _WesktopCSRFMiddleware
 
 logger = logging.getLogger(__name__)
 
-# Re-export for backward compatibility (routers/auth.py imports this).
-from wesktop.auth import CSRFMiddleware  # noqa: F401
-
 
 def generate_csrf_token() -> str:
     """Generate a cryptographically secure CSRF token.
