@@ -97,7 +97,7 @@ def get_diagnostics_stats() -> dict[str, Any]:
 
     from codehome.serve.agent_sessions import agent_sessions
     from codehome.serve.events import events as _events
-    from codehome.serve.middleware import request_count
+    from codehome.serve.middleware import get_request_count
     from codehome.serve.server import _server_start_time
     from codehome.serve.services import State
     from codehome.serve.services import services as _services
@@ -110,7 +110,7 @@ def get_diagnostics_stats() -> dict[str, Any]:
 
     return {
         "uptime": time.time() - _server_start_time,
-        "total_requests": request_count,
+        "total_requests": get_request_count(),
         "active_sse_connections": _events.client_count,
         "running_services": len(running_services),
         "active_agent_sessions": len(active_agents),
@@ -137,11 +137,11 @@ def get_request_metrics() -> dict[str, Any]:
     - slow_endpoints: top 10 endpoints by p95 latency
     - window_seconds: actual time span covered by the buffer
     """
-    from codehome.serve.middleware import request_history
+    from codehome.serve.middleware import get_request_history
 
     now = time.time()
     # Snapshot the deque into a list to avoid mutation during iteration.
-    entries = list(request_history)
+    entries = list(get_request_history())
 
     if not entries:
         return {
