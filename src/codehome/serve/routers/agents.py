@@ -2,10 +2,8 @@
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
-from starlette.requests import Request
+from wesktop import Router, HTTPError, Request
 
 from codehome.bus import Event
 from codehome.bus import fire as bus_fire
@@ -25,12 +23,9 @@ from codehome.serve.dependencies import (
 from codehome.serve.events import EventManager
 from codehome.serve.questions import QuestionStore
 
-# Optional bearer scheme for hook auth (same as in server.py).
-_bearer_scheme = HTTPBearer(auto_error=False)
-
 # -- Authenticated agent endpoints -----------------------------------------
 
-router = APIRouter()
+router = Router()
 
 
 class DispatchAgentRequest(BaseModel):
@@ -43,15 +38,12 @@ class DispatchAgentRequest(BaseModel):
 
 
 @router.post("/api/branches/{qualified}/agents")
-async def api_dispatch_agent(
-    qualified: str,
-    req: DispatchAgentRequest,
-    request: Request,
-    user: dict[str, Any] = Depends(get_current_user),
-    agent_sessions: AgentSessionManager = Depends(get_agent_session_manager),
-) -> object:
+async def api_dispatch_agent(request: Request, user: dict[str, Any] = ...) -> object:
     """Dispatch a task agent for this branch."""
-    config = request.app.state.config
+    qualified = request.path_params["qualified"]
+    req = request.json_as(DispatchAgentRequest)
+    config = request.state.config
+    agent_sessions: AgentSessionManager = get_agent_session_manager(request)
     server_url = f"http://127.0.0.1:{config.port}"
 
     try:
@@ -69,41 +61,38 @@ async def api_dispatch_agent(
             agent_sessions=agent_sessions,
         )
     except FileNotFoundError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from None
+        raise HTTPError(404, str(e)) from None
 
 
 @router.get("/api/branches/{qualified}/agents")
-async def api_list_agents(
-    qualified: str,
-    agent_sessions: AgentSessionManager = Depends(get_agent_session_manager),
-) -> object:
+async def api_list_agents(request: Request, user: dict[str, Any] = ...) -> object:
     """List agent sessions for this branch (active + recent, last 20)."""
+    qualified = request.path_params["qualified"]
+    agent_sessions: AgentSessionManager = get_agent_session_manager(request)
     sessions = agent_sessions.list_sessions(branch=qualified)
     return [s.to_dict() for s in sessions[:20]]
 
 
 @router.get("/api/branches/{qualified}/agents/{session_id}")
-async def api_get_agent(
-    qualified: str,
-    session_id: str,
-    agent_sessions: AgentSessionManager = Depends(get_agent_session_manager),
-) -> object:
+async def api_get_agent(request: Request, user: dict[str, Any] = ...) -> object:
     """Get detailed info for a single agent session."""
+    qualified = request.path_params["qualified"]
+    session_id = request.path_params["session_id"]
+    agent_sessions: AgentSessionManager = get_agent_session_manager(request)
     session = agent_sessions.get_session(session_id)
     if not session or session.branch != qualified:
-        raise HTTPException(status_code=404, detail="Agent session not found")
+        raise HTTPError(404, "Agent session not found")
     return session.to_dict()
 
 
 @router.delete("/api/branches/{qualified}/agents/{session_id}")
-async def api_cancel_agent(
-    qualified: str,
-    session_id: str,
-    agent_sessions: AgentSessionManager = Depends(get_agent_session_manager),
-    question_store: QuestionStore = Depends(get_question_store),
-    events: EventManager = Depends(get_event_manager),
-) -> object:
+async def api_cancel_agent(request: Request, user: dict[str, Any] = ...) -> object:
     """Cancel an active agent session."""
+    qualified = request.path_params["qualified"]
+    session_id = request.path_params["session_id"]
+    agent_sessions: AgentSessionManager = get_agent_session_manager(request)
+    question_store: QuestionStore = get_question_store(request)
+    events: EventManager = get_event_manager(request)
     try:
         return await cancel_agent_session(
             qualified,
@@ -113,9 +102,9 @@ async def api_cancel_agent(
             events=events,
         )
     except LookupError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from None
+        raise HTTPError(404, str(e)) from None
     except ValueError as e:
-        raise HTTPException(status_code=409, detail=str(e)) from None
+        raise HTTPError(409, str(e)) from None
 
 
 class AnswerAgentRequest(BaseModel):
@@ -123,19 +112,18 @@ class AnswerAgentRequest(BaseModel):
 
 
 @router.post("/api/branches/{qualified}/agents/{session_id}/answer")
-async def api_answer_agent(
-    qualified: str,
-    session_id: str,
-    req: AnswerAgentRequest,
-    agent_sessions: AgentSessionManager = Depends(get_agent_session_manager),
-    question_store: QuestionStore = Depends(get_question_store),
-    events: EventManager = Depends(get_event_manager),
-) -> object:
+async def api_answer_agent(request: Request, user: dict[str, Any] = ...) -> object:
     """Answer an agent's question (for future AskUserQuestion hook integration).
 
     Stores the answer as an event on the session. The agent's hook receiver
     can poll for answers or be notified via the session event list.
     """
+    qualified = request.path_params["qualified"]
+    session_id = request.path_params["session_id"]
+    req = request.json_as(AnswerAgentRequest)
+    agent_sessions: AgentSessionManager = get_agent_session_manager(request)
+    question_store: QuestionStore = get_question_store(request)
+    events: EventManager = get_event_manager(request)
     try:
         await answer_agent_question(
             qualified,
@@ -146,15 +134,15 @@ async def api_answer_agent(
             events=events,
         )
     except LookupError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from None
+        raise HTTPError(404, str(e)) from None
     except ValueError as e:
-        raise HTTPException(status_code=409, detail=str(e)) from None
+        raise HTTPError(409, str(e)) from None
     return {"ok": True}
 
 
 # -- Hook receiver (public, uses its own bearer auth) ----------------------
 
-public_router = APIRouter()
+public_router = Router()
 
 
 class HookEventRequest(BaseModel):
@@ -163,22 +151,23 @@ class HookEventRequest(BaseModel):
 
 
 @public_router.post("/api/hooks/agent/{session_id}")
-async def api_agent_hook(
-    session_id: str,
-    req: HookEventRequest,
-    request: Request,
-    credentials: HTTPAuthorizationCredentials | None = Depends(_bearer_scheme),
-    agent_sessions: AgentSessionManager = Depends(get_agent_session_manager),
-    question_store: QuestionStore = Depends(get_question_store),
-    events: EventManager = Depends(get_event_manager),
-) -> object:
+async def api_agent_hook(request: Request) -> object:
     """Receive Claude Code hook events from an agent subprocess.
 
     Authenticates via the agent's SA_AUTH_TOKEN (bearer token). Stores the
     event in the session's event list and broadcasts via SSE.
     """
-    token = credentials.credentials if credentials else None
-    config = request.app.state.config
+    session_id = request.path_params["session_id"]
+    req = request.json_as(HookEventRequest)
+
+    # Extract bearer token from Authorization header.
+    auth_header = request.header("authorization", "") or ""
+    token = auth_header[7:] if auth_header.startswith("Bearer ") else None
+
+    config = request.state.config
+    agent_sessions: AgentSessionManager = get_agent_session_manager(request)
+    question_store: QuestionStore = get_question_store(request)
+    events: EventManager = get_event_manager(request)
 
     try:
         await process_agent_hook(
@@ -192,9 +181,9 @@ async def api_agent_hook(
             events=events,
         )
     except PermissionError as e:
-        raise HTTPException(status_code=401, detail=str(e)) from None
+        raise HTTPError(401, str(e)) from None
     except LookupError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from None
+        raise HTTPError(404, str(e)) from None
     return {"ok": True}
 
 
@@ -213,12 +202,11 @@ class CreateQuestionRequest(BaseModel):
 
 
 @router.post("/api/questions")
-async def api_create_question(
-    req: CreateQuestionRequest,
-    question_store: QuestionStore = Depends(get_question_store),
-    events: EventManager = Depends(get_event_manager),
-) -> object:
+async def api_create_question(request: Request, user: dict[str, Any] = ...) -> object:
     """Create a persisted question and broadcast it to the dashboard."""
+    req = request.json_as(CreateQuestionRequest)
+    question_store: QuestionStore = get_question_store(request)
+    events: EventManager = get_event_manager(request)
     q = question_store.create(
         source=req.source,
         branch=req.branch,
@@ -247,23 +235,21 @@ async def api_create_question(
 
 
 @router.get("/api/questions")
-async def api_list_questions(
-    branch: str | None = None,
-    status: str | None = None,
-    question_store: QuestionStore = Depends(get_question_store),
-) -> object:
+async def api_list_questions(request: Request, user: dict[str, Any] = ...) -> object:
     """List persisted questions, optionally filtered by branch and status."""
+    branch = request.query("branch")
+    status = request.query("status")
+    question_store: QuestionStore = get_question_store(request)
     qs = question_store.list(branch=branch, status=status)
     return [q.to_dict() for q in qs]
 
 
 @router.get("/api/questions/{question_id}")
-async def api_get_question(
-    question_id: str,
-    question_store: QuestionStore = Depends(get_question_store),
-) -> object:
+async def api_get_question(request: Request, user: dict[str, Any] = ...) -> object:
     """Get a single question by ID."""
+    question_id = request.path_params["question_id"]
+    question_store: QuestionStore = get_question_store(request)
     q = question_store.get(question_id)
     if not q:
-        raise HTTPException(status_code=404, detail="Question not found")
+        raise HTTPError(404, "Question not found")
     return q.to_dict()
