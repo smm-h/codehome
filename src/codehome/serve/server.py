@@ -8,14 +8,16 @@ Architecture:
   are wesktop Routers composed into a single wesktop Router.
 - Plugin-contributed routers remain FastAPI APIRouters on a FastAPI sub-app.
 - A composite ASGI app tries the wesktop app first, falling back to the
-  FastAPI app for plugin routes and static files.
+  FastAPI app for plugin routes, with SPA static file fallback.
 """
 
 import asyncio
+import mimetypes
 import os
 import time
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Any
 
 from fastapi import Depends, FastAPI
@@ -200,7 +202,7 @@ async def lifespan(_app: Any) -> AsyncGenerator[dict[str, Any], None]:
         try:
             vite_proc, vite_port = await start_vite_dev()
             # Set the port on the proxy middleware so it starts forwarding.
-            # _vite_proxy is the module-level ViteProxyMiddleware instance.
+            # _vite_proxy is the module-level _LazyViteProxy wrapping wesktop's ViteDevProxy.
             if _vite_proxy is not None:
                 _vite_proxy.vite_port = vite_port
             vite_drain_task = asyncio.create_task(drain_vite_output(vite_proc))
@@ -369,11 +371,34 @@ if features.enabled("plugins"):
                     prefix=f"/api/p/{_plugin.name}",
                 )
 
-# SPA static file fallback (stable mode only, via FastAPI catch-all router).
-if not _DEV_MODE:
-    from codehome.serve.static_files import router as _static_router
+# ---------------------------------------------------------------------------
+# SPA static file fallback (stable mode only)
+# ---------------------------------------------------------------------------
+# Discover the dashboard plugin's static directory for SPA serving.
+# In dev mode, Vite serves all frontend assets via the dev proxy.
 
-    _fastapi_app.include_router(_static_router)
+def _find_dashboard_static() -> Path | None:
+    """Discover the dashboard plugin's static directory.
+
+    Returns the plugin's static/ dir if the plugin is loaded and the
+    directory exists, otherwise falls back to the legacy path. Returns
+    None if neither exists.
+    """
+    from codehome.plugins import registry as _pr
+
+    plugin = _pr.get("dashboard")
+    if plugin is not None:
+        plugin_static = Path(plugin.plugin_dir) / "static"
+        if plugin_static.is_dir():
+            return plugin_static
+    # Fallback: legacy location adjacent to the server module.
+    legacy = Path(__file__).parent / "static"
+    if legacy.is_dir():
+        return legacy
+    return None
+
+
+_SPA_STATIC_DIR: Path | None = None if _DEV_MODE else _find_dashboard_static()
 
 
 # ---------------------------------------------------------------------------
@@ -398,16 +423,24 @@ class _CompositeApp:
 
     Lifespan is handled by the wesktop app. HTTP requests try the wesktop
     router first; if no route matches (404), the request falls through to
-    the FastAPI app for plugin routes and static files.
+    the FastAPI app for plugin routes. Unmatched GET requests in stable
+    mode are served by the SPA fallback (dashboard static files).
 
     Exposes .state and .dependency_overrides from the FastAPI app for
     backward compatibility with plugins and tests.
     """
 
-    def __init__(self, wesktop_app: Any, fastapi_app: FastAPI, wesktop_router: Router) -> None:
+    def __init__(
+        self,
+        wesktop_app: Any,
+        fastapi_app: FastAPI,
+        wesktop_router: Router,
+        spa_static_dir: Path | None = None,
+    ) -> None:
         object.__setattr__(self, "_wesktop_app", wesktop_app)
         object.__setattr__(self, "_fastapi_app", fastapi_app)
         object.__setattr__(self, "_wesktop_router", wesktop_router)
+        object.__setattr__(self, "_spa_static_dir", spa_static_dir)
 
     def _inject_fastapi_state(self, scope: Any) -> None:
         """Merge FastAPI app.state attributes into scope["state"].
@@ -441,6 +474,7 @@ class _CompositeApp:
         wesktop_app = object.__getattribute__(self, "_wesktop_app")
         fastapi_app = object.__getattribute__(self, "_fastapi_app")
         wesktop_router = object.__getattribute__(self, "_wesktop_router")
+        spa_static_dir = object.__getattribute__(self, "_spa_static_dir")
 
         if scope["type"] == "lifespan":
             # wesktop handles lifespan (state dict propagation).
@@ -466,12 +500,82 @@ class _CompositeApp:
             # Check if wesktop router has a matching route.
             if wesktop_router.match(method, path):
                 await wesktop_app(scope, receive, send)
-            else:
+                return
+
+            # Try FastAPI for plugin routes (non-SPA paths).
+            if path.startswith("/api/") or path.startswith("/events") or path == "/api":
                 await fastapi_app(scope, receive, send)
+                return
+
+            # Plugin routes that use root_routes=true may live at any path;
+            # try FastAPI for non-GET methods (SPA fallback only serves GET).
+            if method != "GET":
+                await fastapi_app(scope, receive, send)
+                return
+
+            # SPA fallback: serve static files from the dashboard build.
+            if spa_static_dir is not None:
+                await self._serve_spa(scope, receive, send, spa_static_dir, path)
+                return
+
+            # No SPA dir available -- let FastAPI handle (it will 404).
+            await fastapi_app(scope, receive, send)
             return
 
         # Unknown scope type -- try wesktop.
         await wesktop_app(scope, receive, send)
+
+    @staticmethod
+    async def _serve_spa(
+        scope: Any, receive: Any, send: Any, static_dir: Path, path: str,
+    ) -> None:
+        """Serve a static file or fall back to index.html for SPA routing."""
+        # Drain request body (required by ASGI even for GET).
+        while True:
+            msg = await receive()
+            if not msg.get("more_body", False):
+                break
+
+        # Try serving an actual file matching the path.
+        rel = path.lstrip("/")
+        if rel:
+            candidate = static_dir / rel
+            if candidate.is_file() and static_dir in candidate.resolve().parents:
+                body = candidate.read_bytes()
+                ct = mimetypes.guess_type(str(candidate))[0] or "application/octet-stream"
+                await send({
+                    "type": "http.response.start",
+                    "status": 200,
+                    "headers": [
+                        (b"content-type", ct.encode()),
+                        (b"content-length", str(len(body)).encode()),
+                    ],
+                })
+                await send({"type": "http.response.body", "body": body})
+                return
+
+        # SPA fallback: serve index.html for client-side routing.
+        index = static_dir / "index.html"
+        if index.is_file():
+            body = index.read_bytes()
+            await send({
+                "type": "http.response.start",
+                "status": 200,
+                "headers": [
+                    (b"content-type", b"text/html"),
+                    (b"content-length", str(len(body)).encode()),
+                ],
+            })
+            await send({"type": "http.response.body", "body": body})
+            return
+
+        # No index.html -- 404.
+        await send({
+            "type": "http.response.start",
+            "status": 404,
+            "headers": [(b"content-type", b"application/json")],
+        })
+        await send({"type": "http.response.body", "body": b'{"detail": "Not found"}'})
 
     def __getattr__(self, name: str) -> Any:
         fastapi_app = object.__getattribute__(self, "_fastapi_app")
@@ -482,7 +586,7 @@ class _CompositeApp:
         setattr(fastapi_app, name, value)
 
 
-_composite = _CompositeApp(_wesktop_app, _fastapi_app, _wesktop_router)
+_composite = _CompositeApp(_wesktop_app, _fastapi_app, _wesktop_router, _SPA_STATIC_DIR)
 
 
 # ---------------------------------------------------------------------------
@@ -519,11 +623,42 @@ if _DEV_MODE:
     )
 
 # -- Vite dev proxy (dev mode only) ----------------------------------------
-_vite_proxy = None
+# Uses wesktop's ViteDevProxy with a lazy-port wrapper: the inner proxy is
+# constructed only when vite_port is set (after start_vite_dev() succeeds
+# in the lifespan). Until then, all requests pass through to the inner app.
+_vite_proxy: Any = None
 if _DEV_MODE:
-    from codehome.serve.vite_dev import ViteProxyMiddleware
+    from wesktop.middleware import ViteDevProxy as _WesktopViteDevProxy
 
-    _vite_proxy = ViteProxyMiddleware(_outer_app)
+    class _LazyViteProxy:
+        """Wraps wesktop's ViteDevProxy with lazy port assignment.
+
+        Falls through to the inner app until vite_port is set.
+        """
+
+        def __init__(self, inner_app: Any) -> None:
+            self._inner_app = inner_app
+            self._proxy: Any = None
+
+        @property
+        def vite_port(self) -> int | None:
+            return self._proxy.vite_port if self._proxy else None
+
+        @vite_port.setter
+        def vite_port(self, port: int) -> None:
+            self._proxy = _WesktopViteDevProxy(self._inner_app, vite_port=port)
+
+        async def close(self) -> None:
+            if self._proxy is not None:
+                await self._proxy.close()
+
+        async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+            if self._proxy is not None:
+                await self._proxy(scope, receive, send)
+            else:
+                await self._inner_app(scope, receive, send)
+
+    _vite_proxy = _LazyViteProxy(_outer_app)
     _outer_app = _vite_proxy
 
 
