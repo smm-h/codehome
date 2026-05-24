@@ -37,16 +37,6 @@ def _before_send(event: dict[str, object], hint: dict[str, object]) -> dict[str,
         if isinstance(exc_value, HTTPError) and 400 <= exc_value.status_code < 500:
             return None
 
-        # FastAPI/Starlette HTTP exceptions with 4xx status codes.
-        # Kept for plugin routes that still use FastAPI (Phase 10 removes this).
-        try:
-            from starlette.exceptions import HTTPException
-
-            if isinstance(exc_value, HTTPException) and 400 <= exc_value.status_code < 500:
-                return None
-        except ImportError:
-            pass
-
     return event
 
 
@@ -69,26 +59,8 @@ def init_sentry(config: object) -> bool:
         logger.warning("sentry_sdk not installed; Sentry error tracking disabled")
         return False
 
-    # Use available integrations -- the FastAPI/Starlette integrations are
-    # optional (they come with sentry-sdk[fastapi] extra). During the
-    # migration, they may or may not be installed.
-    integrations = []
-    try:
-        from sentry_sdk.integrations.starlette import StarletteIntegration
-
-        integrations.append(StarletteIntegration())
-    except ImportError:
-        pass
-    try:
-        from sentry_sdk.integrations.fastapi import FastApiIntegration
-
-        integrations.append(FastApiIntegration())
-    except ImportError:
-        pass
-
     sentry_sdk.init(
         dsn=dsn,
-        integrations=integrations,
         before_send=_before_send,  # type: ignore[arg-type]
         # Capture 100% of errors; adjust if volume becomes a concern.
         sample_rate=1.0,
