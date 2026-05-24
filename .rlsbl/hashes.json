@@ -4,7 +4,12 @@
   "CHANGELOG.md": "7a6ec46141007c18090a0ff325e2dd68cd51588c4e0b5af7b580365e5eaaca85",
   ".gitignore": "fe3c46d1170162c342763bff9b85fefe6dbdc3e6e3a87cbb91413bb5799877c4",
   "CLAUDE.md": "cedcd92451dcbd4f824d64709e058fa3bd2c1c92563463296a2eddf1f8414429",
-  ".rlsbl/hooks/pre-release.sh": "9bae4134d0a4c302287766f9a4a2923b6c5706d2cc7078f553fec843b8cd5a06",
+  ".rlsbl/hooks/pre-release.sh": "914fbcb732e3f17e1fb2f3fdfdb2e84c0f608066ab62888f4f3e16f994fbf611",
   ".rlsbl/hooks/post-release.sh": "b455f8511e0b2655509ecf5dcb0ab7da5bb7c961f47910ff8e00cab5bd51f833",
-  ".claude/settings.json": "78922a784ee78e9e50587e93628cd3b9d4dfbe49087adc4514e6781cea38cbb9"
+  ".claude/settings.json": "78922a784ee78e9e50587e93628cd3b9d4dfbe49087adc4514e6781cea38cbb9",
+  ".rlsbl/hooks/pre-checks.sh": "60c57d4563263124530e6f33aca77550ea2161ad3b33b3ba6ad1c03fea9eb6e2",
+  ".rlsbl/lint/python.toml": "9cfbcef2e010d5fad243437bf2fd8df54a1fae70ee0762f9d11da70fe207501c",
+  ".rlsbl/lint/go.toml": "807d5cf760baad6d571a5bfd43cb163efe356f7462ba9f1918d72de45f62339f",
+  ".rlsbl/lint/npm.toml": "baa36014e65923d8cc5c8b83c77fa651da79351627570476402da66840027645",
+  ".rlsbl/changes/unreleased.jsonl": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 }
