@@ -1,11 +1,8 @@
 """Rate limiting compatibility layer.
 
-During the migration transition, existing FastAPI routers use the slowapi
-``limiter`` object (if available) or a no-op stub.  New wesktop-based
-routers should use ``wesktop.auth.rate_limit`` directly.
-
-Once all routers are migrated to wesktop (Phase 9.4), this module can be
-deleted entirely.
+Re-exports ``wesktop.auth.rate_limit`` for convenience. All routers now
+use wesktop directly; this module can be removed once no external plugins
+import from it.
 """
 
 from typing import Any

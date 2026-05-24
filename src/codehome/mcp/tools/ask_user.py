@@ -1,6 +1,6 @@
 """Ask-user tool: posts a question to the dashboard and polls for the answer.
 
-The MCP server runs as a subprocess of `claude -p`. It reaches the FastAPI
+The MCP server runs as a subprocess of `claude -p`. It reaches the
 server via HTTP using SA_SERVER_URL and SA_AUTH_TOKEN from its environment.
 """
 

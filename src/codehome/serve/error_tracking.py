@@ -4,8 +4,7 @@ Initializes Sentry if a DSN is configured in the server config
 (~/.codehome/config.json, key: "sentry_dsn"). If no DSN is present,
 initialization is silently skipped.
 
-Uses the generic ASGI integration (no FastAPI-specific extras needed)
-since the middleware stack is now wesktop-based.
+Uses the generic ASGI integration since the middleware stack is wesktop-based.
 """
 
 import logging

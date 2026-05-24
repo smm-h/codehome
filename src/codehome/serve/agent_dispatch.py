@@ -2,7 +2,7 @@
 
 Launches task agents as async subprocesses, streams their output via SSE,
 handles timeouts and cleanup. Adapted from the Superagent dispatch pattern
-for async operation within the FastAPI server.
+for async operation within the server.
 """
 
 import asyncio

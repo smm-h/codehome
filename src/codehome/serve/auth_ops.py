@@ -1,7 +1,7 @@
 """Auth operations for the server API.
 
 Extracted from routers/auth.py so route handlers stay thin. Functions here
-have no FastAPI dependencies (no Request, Response, HTTPException).
+have no framework dependencies (no Request, Response, HTTPError).
 Errors raise plain Python exceptions that the router maps to HTTP codes.
 """
 

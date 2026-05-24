@@ -254,7 +254,7 @@ _CDP_PORT_FILE = PORT_FILE.parent / "dashboard.cdp-port"
 def cmd_server(args: argparse.Namespace) -> None:
     """Start the dev server (or stop/restart it).
 
-    .. feature:: Branch-aware local dev server (FastAPI + Svelte 5) at http://127.0.0.1:9100
+    .. feature:: Branch-aware local dev server (wesktop + Svelte 5) at http://127.0.0.1:9100
     .. feature:: Register and start Supabase + Vite + Edge Functions per branch with dynamic port allocation
     .. feature:: Supports multiple branches running simultaneously
     .. feature:: Dev mode: Granian auto-reloads on Python changes, Vite HMR for instant Svelte updates

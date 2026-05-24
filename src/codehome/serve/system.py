@@ -2,7 +2,7 @@
 
 Extracted from the core plugin's system_ops.py so core server
 endpoints (health, logo, diagnostics) work without any plugin installed.
-Functions here have no FastAPI dependencies and no plugin imports.
+Functions here have no framework dependencies and no plugin imports.
 """
 
 from __future__ import annotations

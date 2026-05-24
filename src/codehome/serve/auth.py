@@ -1,6 +1,6 @@
 """Authentication helpers: user storage, password hashing, JWT tokens.
 
-Pure functions with no FastAPI dependencies -- keeps auth logic testable
+Pure functions with no framework dependencies -- keeps auth logic testable
 and reusable outside the server context.
 """
 
