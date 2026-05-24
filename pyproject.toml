@@ -10,7 +10,6 @@ dependencies = [
     "bcrypt>=4.0.0",
     "cryptography>=46.0.6",
     "docker>=7.1.0",
-    "fastapi>=0.135.2",
     "granian>=2.7.3",
     "mcp>=1.0.0",
     "pyjwt[crypto]>=2.8.0",
