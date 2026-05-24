@@ -30,7 +30,7 @@ from codehome.serve.server import app
 # Constants used across tests.
 # ---------------------------------------------------------------------------
 
-TEST_SECRET = "test-jwt-secret-for-auth-tests"
+TEST_SECRET = "test-secret-key-that-is-at-least-thirty-two-bytes-long"
 TEST_ADMIN = {
     "username": "admin",
     "password_hash": hash_password("adminpass"),
@@ -168,7 +168,7 @@ class TestCreateToken:
     """4. create_token returns a valid JWT string."""
 
     def test_returns_string(self):
-        token = create_token("alice", "admin", "secret123")
+        token = create_token("alice", "admin", "test-secret-key-that-is-at-least-thirty-two-bytes-long")
         assert isinstance(token, str)
         # JWTs have three dot-separated parts.
         assert len(token.split(".")) == 3
@@ -178,8 +178,8 @@ class TestVerifyToken:
     """5-8. verify_token decoding and validation."""
 
     def test_valid_token_returns_claims(self):
-        token = create_token("alice", "admin", "secret123")
-        claims = verify_token(token, "secret123")
+        token = create_token("alice", "admin", "test-secret-key-that-is-at-least-thirty-two-bytes-long")
+        claims = verify_token(token, "test-secret-key-that-is-at-least-thirty-two-bytes-long")
         assert claims is not None
         assert claims["sub"] == "alice"
         assert claims["role"] == "admin"
@@ -188,21 +188,21 @@ class TestVerifyToken:
 
     def test_expired_token_returns_none(self):
         # expires_hours=0 creates a token that expires immediately.
-        token = create_token("alice", "admin", "secret123", expires_hours=0)
-        claims = verify_token(token, "secret123")
+        token = create_token("alice", "admin", "test-secret-key-that-is-at-least-thirty-two-bytes-long", expires_hours=0)
+        claims = verify_token(token, "test-secret-key-that-is-at-least-thirty-two-bytes-long")
         assert claims is None
 
     def test_garbage_token_returns_none(self):
-        claims = verify_token("not.a.jwt", "secret123")
+        claims = verify_token("not.a.jwt", "test-secret-key-that-is-at-least-thirty-two-bytes-long")
         assert claims is None
 
     def test_empty_string_returns_none(self):
-        claims = verify_token("", "secret123")
+        claims = verify_token("", "test-secret-key-that-is-at-least-thirty-two-bytes-long")
         assert claims is None
 
     def test_wrong_secret_returns_none(self):
-        token = create_token("alice", "admin", "correct-secret")
-        claims = verify_token(token, "wrong-secret")
+        token = create_token("alice", "admin", "test-secret-key-that-is-at-least-thirty-two-bytes-long")
+        claims = verify_token(token, "wrong-secret-key-that-is-at-least-thirty-two-bytes-long")
         assert claims is None
 
 
