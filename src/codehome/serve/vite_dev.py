@@ -58,7 +58,7 @@ async def start_vite_dev(dashboard_dir: Path | None = None) -> tuple[asyncio.sub
     port = _find_free_port()
 
     # VITE_EMBEDDED=1 tells vite.config.ts to disable its /api and /events
-    # proxy (FastAPI is the entry point, not Vite).
+    # proxy (the server is the entry point, not Vite).
     env = {**os.environ, "VITE_EMBEDDED": "1"}
 
     proc = await asyncio.create_subprocess_exec(

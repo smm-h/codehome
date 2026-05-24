@@ -428,8 +428,7 @@ def _server_check() -> None:
     tf = _resolve_token_file()
     token = tf.read_text().strip() if tf.exists() else None
 
-    # Discover the static dir from the dashboard plugin (same pattern as
-    # _maybe_rebuild and static_files.py); fall back to legacy path.
+    # Discover the static dir from the dashboard plugin; fall back to legacy path.
     from codehome.plugins import registry as plugin_registry
 
     _plugin = plugin_registry.get("dashboard")
