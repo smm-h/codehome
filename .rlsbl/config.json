@@ -2,5 +2,6 @@
   "targets": [
     "npm",
     "pypi"
-  ]
+  ],
+  "private": false
 }
