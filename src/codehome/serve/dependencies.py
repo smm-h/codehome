@@ -2,17 +2,12 @@
 
 Each function retrieves the corresponding singleton from request state
 (where it was stored during the lifespan startup).  Route handlers use
-these via ``Depends()`` (FastAPI) or wesktop DI for testability -- tests
-can override any dependency with ``app.dependency_overrides``.
+these via wesktop DI for testability -- tests can override any dependency
+with ``app.dependency_overrides``.
 
 Non-route code (background tasks, helper modules) continues to import the
 module-level singletons directly.  Both paths reference the same instance
 because the lifespan stores the module-level instance on ``app.state``.
-
-During the hybrid migration phase, these functions work with both FastAPI's
-Starlette Request (request.app.state.*) and wesktop's Request
-(request.state.*). The ``_get_state_attr`` helper abstracts the difference.
-The ``request`` parameter is typed as ``Any`` to accept both.
 """
 
 from __future__ import annotations
@@ -38,23 +33,13 @@ if TYPE_CHECKING:
 
 
 def _get_state_attr(request: Any, name: str) -> Any:
-    """Retrieve a named attribute from request state.
+    """Retrieve a named attribute from request.state.
 
-    Handles both FastAPI (request.app.state.X) and wesktop (request.state.X)
-    access patterns. Returns None if the attribute doesn't exist in either.
+    Returns None if the attribute doesn't exist.
     """
-    # FastAPI pattern: request.app.state.<name>
-    app = getattr(request, "app", None)
-    if app is not None:
-        val = getattr(getattr(app, "state", None), name, None)
-        if val is not None:
-            return val
-    # wesktop pattern: request.state.<name>
     state = getattr(request, "state", None)
     if state is not None:
-        val = getattr(state, name, None)
-        if val is not None:
-            return val
+        return getattr(state, name, None)
     return None
 
 

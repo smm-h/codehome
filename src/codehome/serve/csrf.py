@@ -4,8 +4,7 @@ Adds codehome-specific behavior:
 - CLI token file exemption (~/.codehome/token): requests authenticated via
   the local token file are not vulnerable to CSRF (the auth source is a
   local file, not a browser cookie).
-- Test disable flag via scope["app"].state.csrf_disabled (FastAPI pattern,
-  used during the hybrid migration phase).
+- Test disable flag via scope["state"]["csrf_disabled"].
 
 The generic double-submit cookie validation, Bearer exemption, safe-method
 exemption, and path-based exemptions are handled by wesktop's CSRF middleware.
@@ -38,7 +37,7 @@ class CodehomeCSRFMiddleware:
     """Codehome-specific CSRF wrapper adding CLI token file exemption.
 
     Wraps wesktop's CSRFMiddleware with two additional checks:
-    1. FastAPI test disable flag (scope["app"].state.csrf_disabled)
+    1. Test disable flag (scope["state"]["csrf_disabled"])
     2. CLI token file (~/.codehome/token) -- if present and non-empty,
        the request is exempt from CSRF validation.
     """
@@ -68,11 +67,9 @@ class CodehomeCSRFMiddleware:
             await self._csrf(scope, receive, send)
             return
 
-        # Test disable flag (FastAPI hybrid phase).
-        app_obj = scope.get("app")
-        if app_obj is not None and getattr(
-            getattr(app_obj, "state", None), "csrf_disabled", False,
-        ):
+        # Test disable flag (set via app.state.csrf_disabled = True).
+        state = scope.get("state")
+        if state is not None and state.get("csrf_disabled", False):
             await self._app(scope, receive, send)
             return
 

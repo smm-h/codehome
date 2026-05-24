@@ -1,4 +1,4 @@
-"""Local dev orchestration server — FastAPI server and SSE events."""
+"""Local dev orchestration server — wesktop ASGI server and SSE events."""
 
 from __future__ import annotations
 

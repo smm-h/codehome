@@ -1,4 +1,4 @@
-"""Integration tests for the FastAPI server endpoints.
+"""Integration tests for the server endpoints.
 
 Uses httpx.AsyncClient with ASGITransport to test endpoints without
 starting a real server.

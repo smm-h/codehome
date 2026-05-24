@@ -5,11 +5,8 @@ Wraps wesktop's auth module to add codehome-specific behavior:
 - Sentry user context integration
 - request.state._user assignment for timing middleware
 
-During the hybrid migration phase, these functions are used both as
-FastAPI Depends() targets and as wesktop DI factories (both receive
-a request object as the first argument). The ``request`` parameter
-is typed as ``Any`` to accept both Starlette and wesktop Request
-objects without importing either.
+These are wesktop DI factories: each receives a wesktop Request as
+the first argument and is registered via ``deps={"user": get_current_user}``.
 """
 
 import logging
@@ -39,27 +36,15 @@ async def get_current_user(request: Any) -> dict[str, str]:
     token: str | None = None
 
     # 1. Bearer header
-    # Works with both Starlette Request (.headers is a Headers mapping) and
-    # wesktop Request (.header() method).
-    if hasattr(request, "headers") and hasattr(request.headers, "get"):
-        auth_header = request.headers.get("authorization", "")
-    elif hasattr(request, "header"):
-        auth_header = request.header("authorization", "") or ""
-    else:
-        auth_header = ""
+    auth_header = request.header("authorization", "") or ""
     if auth_header.startswith("Bearer "):
         token = auth_header[7:]
 
     # 2. Session cookie
-    # Starlette: request.cookies dict; wesktop: request.cookie() method.
     if not token:
-        if hasattr(request, "cookies") and isinstance(request.cookies, dict):
-            token = request.cookies.get("session") or None
-        elif hasattr(request, "cookie"):
-            token = request.cookie("session") or None
+        token = request.cookie("session") or None
 
     # 3. Query parameter
-    # Both Starlette and wesktop support request.query_params with .get().
     if not token:
         qp = getattr(request, "query_params", None)
         if qp is not None and hasattr(qp, "get"):
@@ -80,7 +65,7 @@ async def get_current_user(request: Any) -> dict[str, str]:
     if not token:
         raise HTTPError(401, "Not authenticated")
 
-    # Resolve JWT secret from request state (works with both FastAPI and wesktop).
+    # Resolve JWT secret from request state.
     config = _get_config(request)
     jwt_secret = config.jwt_secret if hasattr(config, "jwt_secret") else config["jwt_secret"]
     claims = verify_token(token, jwt_secret)
@@ -99,10 +84,7 @@ async def get_current_user(request: Any) -> dict[str, str]:
 
 
 async def require_admin(request: Any) -> dict[str, str]:
-    """Dependency that ensures the current user has the admin role.
-
-    Works as both a FastAPI Depends() target and a wesktop DI factory.
-    """
+    """Dependency that ensures the current user has the admin role."""
     user = await get_current_user(request)
     if user.get("role") != "admin":
         raise HTTPError(403, "Admin access required")
@@ -110,23 +92,10 @@ async def require_admin(request: Any) -> dict[str, str]:
 
 
 def _get_config(request: Any) -> Any:
-    """Extract server config from request state, handling both FastAPI and wesktop patterns."""
-    # FastAPI pattern: request.app.state.config
-    app = getattr(request, "app", None)
-    if app is not None:
-        config = getattr(getattr(app, "state", None), "config", None)
-        if config is not None:
-            return config
-
-    # wesktop pattern: request.state.config or request.state["config"]
+    """Extract server config from request.state."""
     state = getattr(request, "state", None)
     if state is not None:
         config = getattr(state, "config", None)
         if config is not None:
             return config
-        if hasattr(state, "get"):
-            config = state.get("config")
-            if config is not None:
-                return config
-
     raise HTTPError(401, "Server config unavailable")
