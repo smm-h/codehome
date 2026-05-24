@@ -1,5 +1,0 @@
-{"commits":["409c0e71f4f6f191910c488d88b7fe94a8a4edf6"],"user_facing":true,"description":"**Fix.** Use wesktop AppConfig for centralized app configuration.","type":"fix"}
-{"commits":["22aff30be503f4dc2e900287690ab8377455cacb","094ef3cab1096c51df4c8d027e25793ca2a80c8b"],"user_facing":true,"description":"**Fix.** Import MCP roles and tools from wesktop instead of maintaining local copies.","type":"fix"}
-{"commits":["48c6909e19e00b8abaa3a75a41114a84fa2d194a"],"user_facing":true,"description":"**Fix.** Document pywebview as optional dependency for the 'v open' command.","type":"fix"}
-{"commits":["82c92741ab5b13a8efd49bfb3b6e90c809b8f649"],"user_facing":false}
-{"commits":["a435d971b3dc9ca960f8e0a2a8d98d5ddf89c928"],"user_facing":false}
