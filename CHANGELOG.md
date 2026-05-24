@@ -2,6 +2,13 @@
 
 # Changelog
 
+## 0.3.1
+
+### Fixes
+
+- **Fix.** Updated repository URL from GreenCapitals to smm-h.
+- **Fix.** Fixed test_plugins.py test for PluginManifest version attribute.
+
 ## 0.3.0
 
 ### Breaking
