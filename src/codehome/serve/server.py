@@ -1,14 +1,15 @@
 """ASGI server for the local dev orchestration server.
 
-Uses wesktop for core routing and middleware. Plugin routes remain on FastAPI
-during the transition (Phase 10 migrates plugin routes to wesktop).
+Uses wesktop for all routing and middleware. Core and plugin routes are
+composed into a single wesktop Router. SPA static file serving is handled
+by a lightweight fallback wrapper around the wesktop app.
 
 Architecture:
 - Core routers (auth, system, features, plugins, services, conductor, agents)
   are wesktop Routers composed into a single wesktop Router.
-- Plugin-contributed routers remain FastAPI APIRouters on a FastAPI sub-app.
-- A composite ASGI app tries the wesktop app first, falling back to the
-  FastAPI app for plugin routes, with SPA static file fallback.
+- Plugin-contributed routers are wesktop Routers mounted on the main router.
+- An SPA fallback wrapper serves dashboard static files for non-API paths
+  in stable mode (dev mode uses the Vite dev proxy instead).
 """
 
 import asyncio
@@ -20,8 +21,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI
-from wesktop import Router, create_app as wesktop_create_app
+from wesktop import Router, State, create_app as wesktop_create_app
 
 from wesktop.middleware import RequestIDMiddleware, RequestTimingMiddleware
 
@@ -59,7 +59,7 @@ _CSRF_EXEMPT_PATHS = [
 
 
 # ---------------------------------------------------------------------------
-# Lifespan (shared by both wesktop and FastAPI apps)
+# Lifespan
 # ---------------------------------------------------------------------------
 
 # State dict populated during lifespan, merged into every wesktop request's
@@ -99,12 +99,12 @@ async def lifespan(_app: Any) -> AsyncGenerator[dict[str, Any], None]:
         "port_allocator": ports,
     }
 
-    # Also store on FastAPI app.state for plugin routes that still use
-    # request.app.state.X during the hybrid migration phase.
-    _fastapi_app.state.config = config
-    _fastapi_app.state.event_manager = events
-    _fastapi_app.state.service_manager = services
-    _fastapi_app.state.port_allocator = ports
+    # Also mirror onto _app_state so that tests setting app.state.X before
+    # the lifespan runs (or overriding after) are visible to wesktop routes.
+    _app_state.config = config
+    _app_state.event_manager = events
+    _app_state.service_manager = services
+    _app_state.port_allocator = ports
 
     # Install event bus subscribers: SSE forwarder + JSONL audit log.
     # The bus singleton exists at import time; subscribers are wired here
@@ -120,27 +120,27 @@ async def lifespan(_app: Any) -> AsyncGenerator[dict[str, Any], None]:
     # Feature-gated singletons: only assign when the flag is enabled.
     if features.enabled("monitoring"):
         state["metrics_collector"] = metrics_collector
-        _fastapi_app.state.metrics_collector = metrics_collector
+        _app_state.metrics_collector = metrics_collector
     if features.enabled("terminal"):
         from codehome.pty import pty_manager
 
         state["pty_manager"] = pty_manager
-        _fastapi_app.state.pty_manager = pty_manager
+        _app_state.pty_manager = pty_manager
     if features.enabled("conductor"):
         state["agent_session_manager"] = agent_sessions
         state["question_store"] = question_store
-        _fastapi_app.state.agent_session_manager = agent_sessions
-        _fastapi_app.state.question_store = question_store
+        _app_state.agent_session_manager = agent_sessions
+        _app_state.question_store = question_store
     if features.enabled("push"):
         state["push_manager"] = push_manager
-        _fastapi_app.state.push_manager = push_manager
+        _app_state.push_manager = push_manager
         # Wire push notifications into the event broadcast pipeline.
         events.set_push_manager(push_manager)
 
     # Periodic update checker (compares pyproject.toml version to git tags).
     update_checker = UpdateChecker()
     state["update_checker"] = update_checker
-    _fastapi_app.state.update_checker = update_checker
+    _app_state.update_checker = update_checker
     update_checker.start()
 
     # SQLite-backed error log for frontend diagnostics and internal errors.
@@ -150,7 +150,7 @@ async def lifespan(_app: Any) -> AsyncGenerator[dict[str, Any], None]:
     _superv.mkdir(parents=True, exist_ok=True)
     error_log = ErrorLog(_superv / "error_log.db")
     state["error_log"] = error_log
-    _fastapi_app.state.error_log = error_log
+    _app_state.error_log = error_log
     error_log.prune(days=30)
 
     await discover_running()
@@ -177,10 +177,10 @@ async def lifespan(_app: Any) -> AsyncGenerator[dict[str, Any], None]:
     if features.enabled("monitoring"):
         metrics_task = asyncio.create_task(metrics_collector.run())
         state["health_checker"] = health_checker
-        _fastapi_app.state.health_checker = health_checker
+        _app_state.health_checker = health_checker
         health_task = asyncio.create_task(health_checker.run())
         state["log_aggregator"] = log_aggregator
-        _fastapi_app.state.log_aggregator = log_aggregator
+        _app_state.log_aggregator = log_aggregator
         log_task = asyncio.create_task(log_aggregator.run())
 
     # Start plugin-contributed background tasks (respects feature gates).
@@ -191,7 +191,7 @@ async def lifespan(_app: Any) -> AsyncGenerator[dict[str, Any], None]:
     _fs = background_tasks.get_task("fetch_scheduler")
     if _fs is not None:
         state["fetch_scheduler"] = _fs
-        _fastapi_app.state.fetch_scheduler = _fs
+        _app_state.fetch_scheduler = _fs
 
     # Dev mode: spawn Vite dev server for HMR and drain its output.
     vite_proc = None
@@ -326,12 +326,8 @@ if features.enabled("conductor"):
 
 
 # ---------------------------------------------------------------------------
-# Plugin routes (now wesktop Router, mounted on _wesktop_router)
+# Plugin routes (wesktop Router, mounted on _wesktop_router)
 # ---------------------------------------------------------------------------
-
-# FastAPI sub-app retained only for backward compatibility with tests that
-# set app.dependency_overrides. Plugin routes now live on _wesktop_router.
-_fastapi_app = FastAPI(title="Veliu Dev Dashboard")
 
 # Plugin-contributed routers (wesktop Router, gated on "plugins" flag).
 from codehome.plugins import registry as _plugin_registry  # noqa: E402
@@ -391,67 +387,66 @@ _SPA_STATIC_DIR: Path | None = None if _DEV_MODE else _find_dashboard_static()
 
 
 # ---------------------------------------------------------------------------
-# Composite ASGI app: wesktop core + FastAPI plugins
+# App state and dependency overrides (test and lifespan integration)
+# ---------------------------------------------------------------------------
+
+# Standalone State and dependency_overrides dict.  The wesktop app receives
+# the overrides dict at creation time (shared reference), so mutations to
+# app.dependency_overrides[key] are reflected in wesktop's DI resolver.
+# _app_state is written to by the lifespan and by tests (via app.state.X);
+# it is injected into every request's scope["state"] by _SPAFallbackApp.
+_app_state = State()
+_dependency_overrides: dict[Any, Any] = {}
+
+
+# ---------------------------------------------------------------------------
+# Wesktop ASGI app
 # ---------------------------------------------------------------------------
 
 # Create the wesktop ASGI app with lifespan but NO built-in middleware
-# (we apply middleware manually below to wrap both wesktop + FastAPI).
-# Share FastAPI's dependency_overrides dict so tests that set
-# app.dependency_overrides[get_current_user] also affect wesktop DI.
+# (we apply middleware manually below to control the stack).
 _wesktop_app = wesktop_create_app(
     _wesktop_router,
     lifespan=lifespan,
     request_id=False,
     request_timing=False,
-    dependency_overrides=_fastapi_app.dependency_overrides,
+    dependency_overrides=_dependency_overrides,
 )
 
 
-class _CompositeApp:
-    """ASGI app that routes to wesktop for core endpoints and FastAPI for plugins.
+# ---------------------------------------------------------------------------
+# SPA fallback wrapper
+# ---------------------------------------------------------------------------
 
-    Lifespan is handled by the wesktop app. HTTP requests try the wesktop
-    router first; if no route matches (404), the request falls through to
-    the FastAPI app for plugin routes. Unmatched GET requests in stable
-    mode are served by the SPA fallback (dashboard static files).
+class _SPAFallbackApp:
+    """ASGI wrapper that adds SPA static file serving and state injection.
 
-    Exposes .state and .dependency_overrides from the FastAPI app for
-    backward compatibility with plugins and tests.
+    Delegates all routing to the wesktop app. For HTTP GET requests that
+    don't match any route, serves static files from the dashboard build
+    directory with index.html fallback for client-side routing.
+
+    Injects _app_state into every request's scope["state"] so that test
+    overrides (app.state.X = ...) are visible to wesktop route handlers.
     """
 
     def __init__(
         self,
         wesktop_app: Any,
-        fastapi_app: FastAPI,
-        wesktop_router: Router,
         spa_static_dir: Path | None = None,
     ) -> None:
         object.__setattr__(self, "_wesktop_app", wesktop_app)
-        object.__setattr__(self, "_fastapi_app", fastapi_app)
-        object.__setattr__(self, "_wesktop_router", wesktop_router)
         object.__setattr__(self, "_spa_static_dir", spa_static_dir)
 
-    def _inject_fastapi_state(self, scope: Any) -> None:
-        """Merge FastAPI app.state attributes into scope["state"].
+    def _inject_app_state(self, scope: Any) -> None:
+        """Merge _app_state attributes into scope["state"].
 
-        During the hybrid phase, tests set app.state.config (which goes to
-        FastAPI's state).  Wesktop reads from scope["state"].  This bridge
-        ensures wesktop handlers see the same state as FastAPI handlers.
-
-        Also ensures that when running with the real lifespan, any test
-        overrides on FastAPI state are visible to wesktop routes.
+        Tests set app.state.config (which writes to _app_state).
+        Wesktop reads from scope["state"]. This bridge ensures wesktop
+        handlers see values set on app.state by tests or the lifespan.
         """
-        fastapi_app = object.__getattribute__(self, "_fastapi_app")
-        fa_state = getattr(fastapi_app, "state", None)
-        if fa_state is None:
-            return
         if "state" not in scope:
             scope["state"] = {}
-        # Starlette's State stores attributes in _state dict; dir() won't
-        # list them.  Access the internal dict directly.
-        state_dict = getattr(fa_state, "_state", None)
-        if state_dict is None:
-            return
+        state_dict = object.__getattribute__(_app_state, "_data")
         for key, value in state_dict.items():
             if key.startswith("_"):
                 continue
@@ -461,57 +456,40 @@ class _CompositeApp:
 
     async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
         wesktop_app = object.__getattribute__(self, "_wesktop_app")
-        fastapi_app = object.__getattribute__(self, "_fastapi_app")
-        wesktop_router = object.__getattribute__(self, "_wesktop_router")
         spa_static_dir = object.__getattribute__(self, "_spa_static_dir")
 
         if scope["type"] == "lifespan":
-            # wesktop handles lifespan (state dict propagation).
             await wesktop_app(scope, receive, send)
             return
 
-        # Inject FastAPI state into scope for wesktop routes.
-        self._inject_fastapi_state(scope)
+        # Inject app state into scope for wesktop routes.
+        self._inject_app_state(scope)
 
-        if scope["type"] == "websocket":
-            # Check wesktop WS routes first, fall back to FastAPI.
+        if scope["type"] in ("websocket", "http"):
             path = scope.get("path", "")
-            if wesktop_router.match_ws(path):
+
+            # For HTTP requests, check if SPA fallback is needed.
+            if scope["type"] == "http":
+                method = scope["method"]
+                if _wesktop_router.match(method, path):
+                    await wesktop_app(scope, receive, send)
+                    return
+
+                # SPA fallback: serve static files for unmatched GET requests.
+                if method == "GET" and spa_static_dir is not None:
+                    if not (path.startswith("/api/") or path.startswith("/events") or path == "/api"):
+                        await self._serve_spa(scope, receive, send, spa_static_dir, path)
+                        return
+
+                # Unmatched non-GET or API paths -- let wesktop handle (404).
                 await wesktop_app(scope, receive, send)
-            else:
-                await fastapi_app(scope, receive, send)
+                return
+
+            # WebSocket -- let wesktop handle.
+            await wesktop_app(scope, receive, send)
             return
 
-        if scope["type"] == "http":
-            method = scope["method"]
-            path = scope["path"]
-
-            # Check if wesktop router has a matching route.
-            if wesktop_router.match(method, path):
-                await wesktop_app(scope, receive, send)
-                return
-
-            # Try FastAPI for plugin routes (non-SPA paths).
-            if path.startswith("/api/") or path.startswith("/events") or path == "/api":
-                await fastapi_app(scope, receive, send)
-                return
-
-            # Plugin routes that use root_routes=true may live at any path;
-            # try FastAPI for non-GET methods (SPA fallback only serves GET).
-            if method != "GET":
-                await fastapi_app(scope, receive, send)
-                return
-
-            # SPA fallback: serve static files from the dashboard build.
-            if spa_static_dir is not None:
-                await self._serve_spa(scope, receive, send, spa_static_dir, path)
-                return
-
-            # No SPA dir available -- let FastAPI handle (it will 404).
-            await fastapi_app(scope, receive, send)
-            return
-
-        # Unknown scope type -- try wesktop.
+        # Unknown scope type -- let wesktop handle.
         await wesktop_app(scope, receive, send)
 
     @staticmethod
@@ -566,27 +544,19 @@ class _CompositeApp:
         })
         await send({"type": "http.response.body", "body": b'{"detail": "Not found"}'})
 
-    def __getattr__(self, name: str) -> Any:
-        fastapi_app = object.__getattribute__(self, "_fastapi_app")
-        return getattr(fastapi_app, name)
 
-    def __setattr__(self, name: str, value: Any) -> None:
-        fastapi_app = object.__getattribute__(self, "_fastapi_app")
-        setattr(fastapi_app, name, value)
-
-
-_composite = _CompositeApp(_wesktop_app, _fastapi_app, _wesktop_router, _SPA_STATIC_DIR)
+_spa_app = _SPAFallbackApp(_wesktop_app, _SPA_STATIC_DIR)
 
 
 # ---------------------------------------------------------------------------
-# Middleware stack wrapping the composite app
+# Middleware stack wrapping the app
 # ---------------------------------------------------------------------------
 # Middleware order (innermost first):
 #   RequestTimingMiddleware -> CSRF -> RequestIDMiddleware -> [CORS] -> [ViteProxy]
 
 # CSRF middleware with codehome-specific exempt paths and token-file bypass.
 _csrf_mw = CodehomeCSRFMiddleware(
-    _composite,
+    _spa_app,
     exempt_paths=_CSRF_EXEMPT_PATHS,
 )
 
@@ -651,26 +621,44 @@ if _DEV_MODE:
     _outer_app = _vite_proxy
 
 
-# The module-level ``app`` is ASGI-callable (for Granian) and also exposes
-# ``.state`` and ``.dependency_overrides`` (for plugins and tests).
-class _ASGIAppProxy:
-    """Proxy that wraps the ASGI middleware stack while exposing FastAPI's state."""
+# ---------------------------------------------------------------------------
+# Module-level app object
+# ---------------------------------------------------------------------------
 
-    def __init__(self, asgi_app: Any, fastapi_app: FastAPI) -> None:
+# The module-level ``app`` is ASGI-callable (for Granian) and also exposes
+# ``.state`` and ``.dependency_overrides`` (for tests and plugins).
+class _ASGIAppProxy:
+    """Proxy that wraps the ASGI middleware stack while exposing state.
+
+    Tests use ``app.state.X = val`` and ``app.dependency_overrides[fn] = mock``
+    to configure the server for testing without running the lifespan.
+    """
+
+    def __init__(self, asgi_app: Any, state: State, dependency_overrides: dict[Any, Any]) -> None:
         object.__setattr__(self, "_asgi_app", asgi_app)
-        object.__setattr__(self, "_fastapi_app", fastapi_app)
+        object.__setattr__(self, "_state", state)
+        object.__setattr__(self, "_dependency_overrides", dependency_overrides)
 
     async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
         asgi_app = object.__getattribute__(self, "_asgi_app")
         await asgi_app(scope, receive, send)
 
+    @property
+    def state(self) -> State:
+        return object.__getattribute__(self, "_state")
+
+    @property
+    def dependency_overrides(self) -> dict[Any, Any]:
+        return object.__getattribute__(self, "_dependency_overrides")
+
     def __getattr__(self, name: str) -> Any:
-        fastapi_app = object.__getattribute__(self, "_fastapi_app")
-        return getattr(fastapi_app, name)
+        # Fall through for any other attribute (e.g. test helpers).
+        state = object.__getattribute__(self, "_state")
+        return getattr(state, name)
 
     def __setattr__(self, name: str, value: Any) -> None:
-        fastapi_app = object.__getattribute__(self, "_fastapi_app")
-        setattr(fastapi_app, name, value)
+        state = object.__getattribute__(self, "_state")
+        setattr(state, name, value)
 
 
-app: Any = _ASGIAppProxy(_outer_app, _fastapi_app)
+app: Any = _ASGIAppProxy(_outer_app, _app_state, _dependency_overrides)
