@@ -1,8 +1,14 @@
 """ASGI server for the local dev orchestration server.
 
-Uses wesktop for middleware (request ID, timing, CORS, CSRF) and keeps
-FastAPI for routing during the migration transition (Phase 9.1-9.3).
-Routers migrate to wesktop Router in Phase 9.4.
+Uses wesktop for core routing and middleware. Plugin routes remain on FastAPI
+during the transition (Phase 10 migrates plugin routes to wesktop).
+
+Architecture:
+- Core routers (auth, system, features, plugins, services, conductor, agents)
+  are wesktop Routers composed into a single wesktop Router.
+- Plugin-contributed routers remain FastAPI APIRouters on a FastAPI sub-app.
+- A composite ASGI app tries the wesktop app first, falling back to the
+  FastAPI app for plugin routes and static files.
 """
 
 import asyncio
@@ -13,6 +19,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 from fastapi import Depends, FastAPI
+from wesktop import Router, create_app as wesktop_create_app
 
 from wesktop.middleware import RequestIDMiddleware, RequestTimingMiddleware
 
@@ -50,12 +57,16 @@ _CSRF_EXEMPT_PATHS = [
 
 
 # ---------------------------------------------------------------------------
-# Lifespan
+# Lifespan (shared by both wesktop and FastAPI apps)
 # ---------------------------------------------------------------------------
+
+# State dict populated during lifespan, merged into every wesktop request's
+# scope["state"] by create_app's lifespan integration.
+_lifespan_state: dict[str, Any] = {}
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+async def lifespan(_app: Any) -> AsyncGenerator[dict[str, Any], None]:
     global _server_start_time
     _server_start_time = time.time()
 
@@ -68,23 +79,30 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     _log = get_logger(component="lifespan")
 
-    # Load server config once at startup; store on app.state for dependencies.
+    # Load server config once at startup; store in lifespan state for dependencies.
     config = load_server_config()
     if not config:
         msg = "Server config not found. Run `v auth setup` first."
         raise RuntimeError(msg)
-    app.state.config = config
     _log.info("server starting", port=config.port)
 
     # Initialize Sentry if a DSN is configured (no-op otherwise).
     init_sentry(config)
 
-    # Store module-level singletons on app.state so route handlers can access
-    # them via FastAPI Depends() (see dependencies.py).  Both the DI path and
-    # direct module imports reference the same instance.
-    app.state.event_manager = events
-    app.state.service_manager = services
-    app.state.port_allocator = ports
+    # Build lifespan state dict -- all singletons accessible via request.state.
+    state: dict[str, Any] = {
+        "config": config,
+        "event_manager": events,
+        "service_manager": services,
+        "port_allocator": ports,
+    }
+
+    # Also store on FastAPI app.state for plugin routes that still use
+    # request.app.state.X during the hybrid migration phase.
+    _fastapi_app.state.config = config
+    _fastapi_app.state.event_manager = events
+    _fastapi_app.state.service_manager = services
+    _fastapi_app.state.port_allocator = ports
 
     # Install event bus subscribers: SSE forwarder + JSONL audit log.
     # The bus singleton exists at import time; subscribers are wired here
@@ -99,30 +117,29 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Feature-gated singletons: only assign when the flag is enabled.
     if features.enabled("monitoring"):
-        app.state.metrics_collector = metrics_collector
+        state["metrics_collector"] = metrics_collector
+        _fastapi_app.state.metrics_collector = metrics_collector
     if features.enabled("terminal"):
         from codehome.pty import pty_manager
 
-        app.state.pty_manager = pty_manager
+        state["pty_manager"] = pty_manager
+        _fastapi_app.state.pty_manager = pty_manager
     if features.enabled("conductor"):
-        app.state.agent_session_manager = agent_sessions
-        app.state.question_store = question_store
+        state["agent_session_manager"] = agent_sessions
+        state["question_store"] = question_store
+        _fastapi_app.state.agent_session_manager = agent_sessions
+        _fastapi_app.state.question_store = question_store
     if features.enabled("push"):
-        app.state.push_manager = push_manager
+        state["push_manager"] = push_manager
+        _fastapi_app.state.push_manager = push_manager
         # Wire push notifications into the event broadcast pipeline.
         events.set_push_manager(push_manager)
 
     # Periodic update checker (compares pyproject.toml version to git tags).
     update_checker = UpdateChecker()
-    app.state.update_checker = update_checker
+    state["update_checker"] = update_checker
+    _fastapi_app.state.update_checker = update_checker
     update_checker.start()
-
-    # Background git fetch scheduler: registered as a background task by the
-    # core plugin (started via background_tasks.start_all() below).
-    # Exposed on app.state after start_all() for the manual-trigger API endpoint.
-
-    # Slack notification dispatcher: registered as a background task by the
-    # core plugin (started via background_tasks.start_all() below).
 
     # SQLite-backed error log for frontend diagnostics and internal errors.
     from codehome.serve.error_log import ErrorLog
@@ -130,7 +147,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     _superv = codehome_home()
     _superv.mkdir(parents=True, exist_ok=True)
     error_log = ErrorLog(_superv / "error_log.db")
-    app.state.error_log = error_log
+    state["error_log"] = error_log
+    _fastapi_app.state.error_log = error_log
     error_log.prune(days=30)
 
     await discover_running()
@@ -156,19 +174,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     log_task = None
     if features.enabled("monitoring"):
         metrics_task = asyncio.create_task(metrics_collector.run())
-        app.state.health_checker = health_checker
+        state["health_checker"] = health_checker
+        _fastapi_app.state.health_checker = health_checker
         health_task = asyncio.create_task(health_checker.run())
-        app.state.log_aggregator = log_aggregator
+        state["log_aggregator"] = log_aggregator
+        _fastapi_app.state.log_aggregator = log_aggregator
         log_task = asyncio.create_task(log_aggregator.run())
 
     # Start plugin-contributed background tasks (respects feature gates).
     background_tasks.start_all()
 
-    # Expose the fetch_scheduler (if running) on app.state for the
+    # Expose the fetch_scheduler (if running) on state for the
     # manual-trigger API endpoint -- resolved by name, no plugin import.
     _fs = background_tasks.get_task("fetch_scheduler")
     if _fs is not None:
-        app.state.fetch_scheduler = _fs
+        state["fetch_scheduler"] = _fs
+        _fastapi_app.state.fetch_scheduler = _fs
 
     # Dev mode: spawn Vite dev server for HMR and drain its output.
     vite_proc = None
@@ -187,7 +208,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         except Exception:
             _log.exception("failed to start Vite dev server -- falling back to static files")
 
-    yield
+    yield state
     _log.info("server shutting down")
 
     # Stop Vite dev server.
@@ -233,43 +254,20 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 
 # ---------------------------------------------------------------------------
-# App creation and router registration
+# Load plugins (must happen before router mounting)
 # ---------------------------------------------------------------------------
 
-# FastAPI app handles routing only -- middleware is applied by wesktop below.
-_fastapi_app = FastAPI(title="Veliu Dev Dashboard", lifespan=lifespan)
-
-
-# -- Bridge wesktop HTTPError into FastAPI's exception handling --------
-# Dependencies and auth modules now raise wesktop.HTTPError instead of
-# FastAPI's HTTPException.  Register a handler so FastAPI catches these
-# and returns the correct JSON error response.
-from wesktop.asgi import HTTPError as _WesktopHTTPError  # noqa: E402
-from fastapi.responses import JSONResponse as _FastAPIJSONResponse  # noqa: E402
-
-
-@_fastapi_app.exception_handler(_WesktopHTTPError)
-async def _wesktop_http_error_handler(_request, exc: _WesktopHTTPError):
-    return _FastAPIJSONResponse(
-        status_code=exc.status_code,
-        content={"detail": exc.detail},
-    )
-
-
-# Public ping endpoint (no auth, no router file needed).
-@_fastapi_app.get("/api/ping")
-async def ping() -> dict[str, bool]:
-    return {"ok": True}
-
-
-# -- Load plugins (must happen before router mounting) ---------------------
 from codehome.plugins.loader import load_all_plugins as _load_plugins  # noqa: E402
 
 _load_plugins()
 
-# -- Import and mount routers ---------------------------------------------
-
 from codehome import features  # noqa: E402
+
+
+# ---------------------------------------------------------------------------
+# Wesktop core router composition
+# ---------------------------------------------------------------------------
+
 from codehome.serve.routers import (  # noqa: E402
     agents,
     auth,
@@ -282,54 +280,75 @@ from codehome.serve.routers import (  # noqa: E402
 from codehome.serve.routers import plugins as plugins_router  # noqa: E402
 from codehome.serve.routers import services as services_router  # noqa: E402
 
-# Public routers (no auth dependency).
-_fastapi_app.include_router(auth.public_router)
-_fastapi_app.include_router(system.public_router)
-_fastapi_app.include_router(services_router.public_router)
-_fastapi_app.include_router(features_router.router)
+# Build the main wesktop Router by composing all core sub-routers.
+_wesktop_router = Router()
 
-# Feature-gated public routers: disable via features.json
+# Public ping endpoint (no auth, no router file needed).
+@_wesktop_router.get("/api/ping")
+async def ping(request: Any) -> dict[str, bool]:
+    return {"ok": True}
+
+# Public routers (no auth dependency).
+_wesktop_router.include_router(auth.public_router)
+_wesktop_router.include_router(system.public_router)
+_wesktop_router.include_router(services_router.public_router)
+_wesktop_router.include_router(features_router.router)
+
+# Feature-gated public routers
 if features.enabled("conductor"):
-    _fastapi_app.include_router(agents.public_router)
+    _wesktop_router.include_router(agents.public_router)
 
 # Push public endpoint (VAPID key retrieval, no auth required).
 if features.enabled("push"):
-    from fastapi import APIRouter as _APIRouter  # noqa: E402
+    _push_router = Router()
 
-    _push_public = _APIRouter(prefix="/api/push", tags=["push"])
-
-    @_push_public.get("/vapid-key")
-    async def _get_vapid_key() -> object:
+    @_push_router.get("/api/push/vapid-key")
+    async def _get_vapid_key(request: Any) -> object:
         """Return the public VAPID key for push subscription registration."""
         return {"public_key": push_manager.public_key}
 
-    _fastapi_app.include_router(_push_public)
+    _wesktop_router.include_router(_push_router)
 
-# Authenticated routers (all endpoints require valid JWT).
-# NOTE: branches, git, system (authed), and matrix routers moved to core plugin.
-_authed_routers: list[Any] = [
-    auth.router,
-    services_router.router,
-    features_router.authed_router,
-]
+# Authenticated routers (all endpoints require valid JWT via router-level deps).
+_auth_deps: dict[str, Any] = {"user": get_current_user}
 
-# Feature-gated routers: disable via features.json
+_wesktop_router.include_router(auth.router, deps=_auth_deps)
+_wesktop_router.include_router(services_router.router, deps=_auth_deps)
+_wesktop_router.include_router(features_router.authed_router, deps=_auth_deps)
+
 if features.enabled("plugins"):
-    _authed_routers.append(plugins_router.router)
+    _wesktop_router.include_router(plugins_router.router, deps=_auth_deps)
 if features.enabled("conductor"):
-    _authed_routers.append(conductor.router)
-    _authed_routers.append(agents.router)
-for _r in _authed_routers:
-    _fastapi_app.include_router(_r, dependencies=[Depends(get_current_user)])
+    _wesktop_router.include_router(conductor.router, deps=_auth_deps)
+    _wesktop_router.include_router(agents.router, deps=_auth_deps)
 
-# -- Plugin-contributed routers (authenticated, gated on "plugins" flag) ----
+
+# ---------------------------------------------------------------------------
+# FastAPI sub-app for plugin routes (Phase 10 migrates these to wesktop)
+# ---------------------------------------------------------------------------
+
+_fastapi_app = FastAPI(title="Veliu Dev Dashboard")
+
+# Bridge wesktop HTTPError into FastAPI's exception handling.
+from wesktop.asgi import HTTPError as _WesktopHTTPError  # noqa: E402
+from fastapi.responses import JSONResponse as _FastAPIJSONResponse  # noqa: E402
+
+
+@_fastapi_app.exception_handler(_WesktopHTTPError)
+async def _wesktop_http_error_handler(_request: Any, exc: _WesktopHTTPError) -> Any:
+    return _FastAPIJSONResponse(
+        status_code=exc.status_code,
+        content={"detail": exc.detail},
+    )
+
+
+# Plugin-contributed routers (authenticated, gated on "plugins" flag).
 from codehome.plugins import registry as _plugin_registry  # noqa: E402
 
 if features.enabled("plugins"):
     for _plugin in _plugin_registry.list_plugins():
         if _plugin.router is not None:
             if _plugin.manifest.root_routes:
-                # Mount at API root (endpoints define their own /api/ paths).
                 _fastapi_app.include_router(
                     _plugin.router,
                     dependencies=[Depends(get_current_user)],
@@ -341,7 +360,6 @@ if features.enabled("plugins"):
                     dependencies=[Depends(get_current_user)],
                 )
         # Public routers (e.g. WebSocket endpoints with query-param auth)
-        # are mounted without the auth dependency.
         if _plugin.public_router is not None:
             if _plugin.manifest.root_routes:
                 _fastapi_app.include_router(_plugin.public_router)
@@ -351,9 +369,7 @@ if features.enabled("plugins"):
                     prefix=f"/api/p/{_plugin.name}",
                 )
 
-# -- SPA static file fallback / Vite dev proxy -----------------------------
-# In dev mode the Vite proxy middleware is added below (outermost ASGI layer).
-# In stable mode the pre-built static files are served via a catch-all router.
+# SPA static file fallback (stable mode only, via FastAPI catch-all router).
 if not _DEV_MODE:
     from codehome.serve.static_files import router as _static_router
 
@@ -361,24 +377,127 @@ if not _DEV_MODE:
 
 
 # ---------------------------------------------------------------------------
-# Wesktop middleware stack wrapping the FastAPI app
+# Composite ASGI app: wesktop core + FastAPI plugins
 # ---------------------------------------------------------------------------
-# The FastAPI app handles routing and lifespan.  Wesktop middleware wraps it
-# for request ID, timing, CSRF, and (in dev mode) CORS.
-#
+
+# Create the wesktop ASGI app with lifespan but NO built-in middleware
+# (we apply middleware manually below to wrap both wesktop + FastAPI).
+# Share FastAPI's dependency_overrides dict so tests that set
+# app.dependency_overrides[get_current_user] also affect wesktop DI.
+_wesktop_app = wesktop_create_app(
+    _wesktop_router,
+    lifespan=lifespan,
+    request_id=False,
+    request_timing=False,
+    dependency_overrides=_fastapi_app.dependency_overrides,
+)
+
+
+class _CompositeApp:
+    """ASGI app that routes to wesktop for core endpoints and FastAPI for plugins.
+
+    Lifespan is handled by the wesktop app. HTTP requests try the wesktop
+    router first; if no route matches (404), the request falls through to
+    the FastAPI app for plugin routes and static files.
+
+    Exposes .state and .dependency_overrides from the FastAPI app for
+    backward compatibility with plugins and tests.
+    """
+
+    def __init__(self, wesktop_app: Any, fastapi_app: FastAPI, wesktop_router: Router) -> None:
+        object.__setattr__(self, "_wesktop_app", wesktop_app)
+        object.__setattr__(self, "_fastapi_app", fastapi_app)
+        object.__setattr__(self, "_wesktop_router", wesktop_router)
+
+    def _inject_fastapi_state(self, scope: Any) -> None:
+        """Merge FastAPI app.state attributes into scope["state"].
+
+        During the hybrid phase, tests set app.state.config (which goes to
+        FastAPI's state).  Wesktop reads from scope["state"].  This bridge
+        ensures wesktop handlers see the same state as FastAPI handlers.
+
+        Also ensures that when running with the real lifespan, any test
+        overrides on FastAPI state are visible to wesktop routes.
+        """
+        fastapi_app = object.__getattribute__(self, "_fastapi_app")
+        fa_state = getattr(fastapi_app, "state", None)
+        if fa_state is None:
+            return
+        if "state" not in scope:
+            scope["state"] = {}
+        # Starlette's State stores attributes in _state dict; dir() won't
+        # list them.  Access the internal dict directly.
+        state_dict = getattr(fa_state, "_state", None)
+        if state_dict is None:
+            return
+        for key, value in state_dict.items():
+            if key.startswith("_"):
+                continue
+            # Don't overwrite values already set by the wesktop lifespan.
+            if key not in scope["state"]:
+                scope["state"][key] = value
+
+    async def __call__(self, scope: Any, receive: Any, send: Any) -> None:
+        wesktop_app = object.__getattribute__(self, "_wesktop_app")
+        fastapi_app = object.__getattribute__(self, "_fastapi_app")
+        wesktop_router = object.__getattribute__(self, "_wesktop_router")
+
+        if scope["type"] == "lifespan":
+            # wesktop handles lifespan (state dict propagation).
+            await wesktop_app(scope, receive, send)
+            return
+
+        # Inject FastAPI state into scope for wesktop routes.
+        self._inject_fastapi_state(scope)
+
+        if scope["type"] == "websocket":
+            # Check wesktop WS routes first, fall back to FastAPI.
+            path = scope.get("path", "")
+            if wesktop_router.match_ws(path):
+                await wesktop_app(scope, receive, send)
+            else:
+                await fastapi_app(scope, receive, send)
+            return
+
+        if scope["type"] == "http":
+            method = scope["method"]
+            path = scope["path"]
+
+            # Check if wesktop router has a matching route.
+            if wesktop_router.match(method, path):
+                await wesktop_app(scope, receive, send)
+            else:
+                await fastapi_app(scope, receive, send)
+            return
+
+        # Unknown scope type -- try wesktop.
+        await wesktop_app(scope, receive, send)
+
+    def __getattr__(self, name: str) -> Any:
+        fastapi_app = object.__getattribute__(self, "_fastapi_app")
+        return getattr(fastapi_app, name)
+
+    def __setattr__(self, name: str, value: Any) -> None:
+        fastapi_app = object.__getattribute__(self, "_fastapi_app")
+        setattr(fastapi_app, name, value)
+
+
+_composite = _CompositeApp(_wesktop_app, _fastapi_app, _wesktop_router)
+
+
+# ---------------------------------------------------------------------------
+# Middleware stack wrapping the composite app
+# ---------------------------------------------------------------------------
 # Middleware order (innermost first):
 #   RequestTimingMiddleware -> CSRF -> RequestIDMiddleware -> [CORS] -> [ViteProxy]
 
 # CSRF middleware with codehome-specific exempt paths and token-file bypass.
-# The token-file check is kept in codehome's CSRF wrapper (not in wesktop's
-# generic CSRF) since it's codehome-specific behavior.
 _csrf_mw = CodehomeCSRFMiddleware(
-    _fastapi_app,
+    _composite,
     exempt_paths=_CSRF_EXEMPT_PATHS,
 )
 
 # Request timing (innermost -- needs request ID in scope for log correlation).
-# The timing middleware instance is stored so system.py can access its counters.
 _timing_mw = RequestTimingMiddleware(
     _csrf_mw,
     exclude_paths=["/events", "/api/terminal"],
@@ -400,9 +519,6 @@ if _DEV_MODE:
     )
 
 # -- Vite dev proxy (dev mode only) ----------------------------------------
-# Added AFTER app construction so it wraps the entire ASGI app.  The
-# middleware intercepts non-API requests and proxies them to Vite.
-# The vite_port is set during lifespan startup via the _vite_proxy reference.
 _vite_proxy = None
 if _DEV_MODE:
     from codehome.serve.vite_dev import ViteProxyMiddleware
@@ -411,14 +527,10 @@ if _DEV_MODE:
     _outer_app = _vite_proxy
 
 
+# The module-level ``app`` is ASGI-callable (for Granian) and also exposes
+# ``.state`` and ``.dependency_overrides`` (for plugins and tests).
 class _ASGIAppProxy:
-    """Proxy that wraps the ASGI middleware stack while exposing FastAPI's state.
-
-    During the hybrid migration phase (FastAPI routing + wesktop middleware),
-    existing code (plugins, tests) accesses ``app.state`` and
-    ``app.dependency_overrides``.  This proxy delegates ASGI calls to the
-    middleware stack and attribute access to the underlying FastAPI app.
-    """
+    """Proxy that wraps the ASGI middleware stack while exposing FastAPI's state."""
 
     def __init__(self, asgi_app: Any, fastapi_app: FastAPI) -> None:
         object.__setattr__(self, "_asgi_app", asgi_app)
@@ -437,6 +549,4 @@ class _ASGIAppProxy:
         setattr(fastapi_app, name, value)
 
 
-# The module-level ``app`` is ASGI-callable (for Granian) and also exposes
-# ``.state`` and ``.dependency_overrides`` (for plugins and tests).
 app: Any = _ASGIAppProxy(_outer_app, _fastapi_app)
